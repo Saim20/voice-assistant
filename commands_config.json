@@ -12,13 +12,13 @@
     },
     "Window and Desktop Management": {
       "show overview,show windows": "ydotool key 125:1 125:0",
-      "move left,go left,left desktop": "ydotool key 125:1 30:1 30:0 125:0",
-      "move right,go right,right desktop": "ydotool key 125:1 32:1 32:0 125:0",
       "switch window,next window": "ydotool key 56:1 15:1 15:0 56:0",
       "new tab,next tab": "ydotool key 29:1 15:1 15:0 29:0",
       "close window,close tab": "ydotool key 29:1 16:1 16:0 29:0",
       "minimize window,minimize": "ydotool key 125:1 36:1 36:0 125:0",
-      "maximize window,maximize": "ydotool key 125:1 17:1 17:0 125:0"
+      "maximize window,maximize": "ydotool key 125:1 17:1 17:0 125:0",
+      "left,move left,go left,left desktop": "ydotool key 125:1 30:1 30:0 125:0",
+      "right,move right,go right,right desktop": "ydotool key 125:1 32:1 32:0 125:0"
     },
     "Text Editing Shortcuts": {
       "copy,copy text": "ydotool key 29:1 46:1 46:0 29:0",

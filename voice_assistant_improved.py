@@ -32,8 +32,13 @@ class VoiceAssistant:
         self.mode_file = self.config_dir / "nerd-dictation.mode"
         self.cursor_file = self.config_dir / "nerd-dictation.cursor"
         self.typing_cursor_file = self.config_dir / "nerd-dictation.typing-cursor"
+        self.buffer_file = Path("/tmp/nerd-dictation.buffer")
         self.state_file = self.config_dir / "voice_assistant_state.json"
-        self.commands_config_file = self.config_dir / "commands_config.json"
+        
+        # Try both config locations
+        config_path = Path.home() / ".config" / "nerd-dictation"
+        self.commands_config_file = config_path / "commands_config.json"
+        self.config_file = config_path / "config.json"
         
         # Load configuration
         self.config = self.load_config()
@@ -58,8 +63,12 @@ class VoiceAssistant:
     def load_config(self) -> Dict[str, Any]:
         """Load configuration from file"""
         try:
+            # Try both config files
             if self.commands_config_file.exists():
                 with open(self.commands_config_file, 'r') as f:
+                    return json.load(f)
+            elif self.config_file.exists():
+                with open(self.config_file, 'r') as f:
                     return json.load(f)
             else:
                 # Create default config if it doesn't exist
@@ -84,8 +93,8 @@ class VoiceAssistant:
                 },
                 "Window and Desktop Management": {
                     "show overview,show windows": "ydotool key 125:1 125:0",
-                    "move left,go left,left desktop": "ydotool key 125:1 30:1 30:0 125:0",
-                    "move right,go right,right desktop": "ydotool key 125:1 32:1 32:0 125:0",
+                    "left,move left,go left,left desktop": "ydotool key 125:1 30:1 30:0 125:0",
+                    "right,move right,go right,right desktop": "ydotool key 125:1 32:1 32:0 125:0",
                     "switch window,next window": "ydotool key 56:1 15:1 15:0 56:0",
                     "new tab,next tab": "ydotool key 29:1 15:1 15:0 29:0",
                     "close window,close tab": "ydotool key 29:1 16:1 16:0 29:0",
@@ -271,21 +280,32 @@ class VoiceAssistant:
         elif old_mode == "command" and new_mode != "command":
             logging.info("Exiting COMMAND mode - popup should be closed")
     
+    def save_buffer_to_file(self, text: str):
+        """Save current buffer text to file for GUI display"""
+        try:
+            with open(self.buffer_file, 'w') as f:
+                f.write(text)
+        except Exception as e:
+            logging.error(f"Error saving buffer to file: {e}")
+
     def _trigger_popup(self):
         """Trigger popup display through subprocess call"""
         try:
             # Get the directory where this script is located
             script_dir = Path(__file__).parent
-            popup_script = script_dir / "modern_popup.py"
+            popup_script = script_dir / "command_popup_kivy.py"
             
-            # Run popup in background without waiting
+            # Save current buffer to file
+            self.save_buffer_to_file(self.recognized_text_buffer)
+            
+            # Run command popup in background without waiting
             subprocess.Popen([
                 "python3", 
                 str(popup_script)
             ], 
             stdout=subprocess.DEVNULL, 
             stderr=subprocess.DEVNULL)
-            logging.info("Popup triggered successfully in background")
+            logging.info("Command popup triggered successfully in background")
         except Exception as e:
             logging.error(f"Error triggering popup: {e}")
 
@@ -497,6 +517,8 @@ class VoiceAssistant:
             self.update_cursor(current_text_length)
             self.recognized_text_buffer += " " + new_text
             self.last_processing_time = current_time
+            # Save buffer to file for GUI display
+            self.save_buffer_to_file(self.recognized_text_buffer)
             logging.info(f"Added to buffer: '{new_text}', Full buffer: '{self.recognized_text_buffer}'")
         
         # Process buffer if:

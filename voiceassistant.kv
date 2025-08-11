@@ -1,0 +1,35 @@
+#:kivy 2.0.0
+
+<RoundedCard>:
+    canvas.before:
+        Color:
+            rgba: self.bg_color if hasattr(self, 'bg_color') else (0.15, 0.15, 0.15, 0.95)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [self.corner_radius] if hasattr(self, 'corner_radius') else [15]
+
+<ModernButton>:
+    canvas.before:
+        Color:
+            rgba: self.background_color
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(10)]
+
+<TabbedPanelHeader>:
+    background_normal: ''
+    background_down: ''
+    canvas.before:
+        Color:
+            rgba: (0.2, 0.2, 0.2, 0.9) if self.state == 'normal' else (0.3, 0.3, 0.3, 1.0)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(10), dp(10), 0, 0]
+
+<TabbedPanel>:
+    background_color: 0.1, 0.1, 0.1, 1
+    border: [0, 0, 0, 0]
+    tab_pos: 'top_left'
