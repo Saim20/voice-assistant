@@ -1,0 +1,54 @@
+{
+  "hotword": "hey",
+  "fuzzy_match_threshold": 85,
+  "logging": {
+    "level": "INFO",
+    "file": "/tmp/voice_assistant.log"
+  },
+  "commands": {
+    "applications": {
+      "terminal": ["open terminal", "start terminal", "launch terminal"],
+      "firefox": ["open firefox", "launch firefox", "start web browser"],
+      "files": ["open files", "launch files", "start file manager"],
+      "spotify": ["open spotify", "launch spotify", "start music"],
+      "code": ["open code", "launch code", "start vscode"],
+      "calculator": ["open calculator", "launch calculator"]
+    },
+    "window_management": {
+      "show_overview": ["show overview", "show windows"],
+      "move_left": ["move left", "go left", "left desktop"],
+      "move_right": ["move right", "go right", "right desktop"],
+      "switch_window": ["switch window", "next window"],
+      "new_tab": ["new tab", "next tab"],
+      "close_window": ["close window", "close tab"],
+      "minimize": ["minimize window", "minimize"],
+      "maximize": ["maximize window", "maximize"]
+    },
+    "text_editing": {
+      "copy": ["copy", "copy text"],
+      "paste": ["paste", "paste text"],
+      "cut": ["cut", "cut text"],
+      "undo": ["undo", "undo last"],
+      "redo": ["redo", "redo last"],
+      "select_all": ["select all", "select everything"]
+    },
+    "system": {
+      "volume_up": ["volume up", "turn up the volume", "increase volume"],
+      "volume_down": ["volume down", "turn down the volume", "decrease volume"],
+      "mute": ["mute", "mute audio", "silence"],
+      "lock_screen": ["lock screen", "lock my screen"],
+      "screenshot": ["screenshot", "take screenshot"],
+      "sleep": ["sleep", "suspend"]
+    },
+    "modes": {
+      "typing_mode": ["go to typing mode", "typing mode", "start typing"],
+      "normal_mode": ["go to normal mode", "normal mode", "stop typing", "exit typing"],
+      "command_mode": ["go to command mode", "command mode"],
+      "cancel": ["cancel", "stop", "nevermind"]
+    }
+  },
+  "typing_mode": {
+    "exit_phrases": ["stop typing", "exit typing", "normal mode", "go to normal mode"],
+    "check_recent_chars": 100
+  }
+}
