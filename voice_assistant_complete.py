@@ -422,19 +422,40 @@ class VoiceAssistant:
         return difflib.SequenceMatcher(None, str1.lower(), str2.lower()).ratio() * 100
 
     def set_mode(self, mode: str):
-        """Set the current mode"""
+        """Set the current mode using external script with suspend/resume"""
         try:
-            with open(self.mode_file, 'w') as f:
-                f.write(mode)
-            logging.info(f"Mode set to: {mode}")
+            old_mode = self.get_mode()
+            
+            # Use external script for mode changes to handle suspend/resume
+            script_path = Path.home() / ".config" / "nerd-dictation" / "mode_changer.sh"
+            
+            if script_path.exists():
+                # Use the external script that handles suspend/resume
+                subprocess.Popen(
+                    [str(script_path), mode],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                logging.info(f"Mode change requested via script: {old_mode} -> {mode}")
+            else:
+                # Fallback to direct mode change
+                with open(self.mode_file, 'w') as f:
+                    f.write(mode)
+                logging.info(f"Mode set directly: {old_mode} -> {mode}")
             
             # Notify about mode changes for GUI integration
-            old_mode = getattr(self, '_last_mode', 'normal')
             self._last_mode = mode
             self._notify_mode_change(old_mode, mode)
             
         except Exception as e:
-            logging.error(f"Error setting mode: {e}")
+            logging.error(f"Error setting mode to {mode}: {e}")
+            # Fallback: try direct mode change
+            try:
+                with open(self.mode_file, 'w') as f:
+                    f.write(mode)
+                logging.info(f"Mode set via fallback: {mode}")
+            except:
+                logging.error(f"Failed to set mode even with fallback: {mode}")
     
     def _notify_mode_change(self, old_mode: str, new_mode: str):
         """Notify about mode changes (for GUI integration)"""
@@ -506,21 +527,36 @@ class VoiceAssistant:
             logging.error(f"Error updating typing cursor: {e}")
 
     def execute_command(self, command: str) -> bool:
-        """Execute a system command in a non-blocking way"""
+        """Execute a system command using external script that handles suspend/resume"""
         try:
-            logging.info(f"Executing command: {command}")
+            logging.info(f"Executing command with suspend/resume: {command}")
             
-            # Use Popen for non-blocking execution instead of subprocess.run()
-            # This prevents GUI applications from blocking the voice assistant
-            process = subprocess.Popen(
-                command, 
-                shell=True, 
-                stdout=subprocess.DEVNULL,  # Redirect stdout to avoid output
-                stderr=subprocess.DEVNULL,  # Redirect stderr to avoid output
-                start_new_session=True     # Detach from parent process
-            )
+            # Get path to command executor script
+            script_path = self.config_dir.parent / "nerd-dictation" / "command_executor.sh"
+            if not script_path.exists():
+                # Fallback to current directory
+                script_path = Path.home() / ".config" / "nerd-dictation" / "command_executor.sh"
             
-            logging.info(f"Command started successfully: {command} (PID: {process.pid})")
+            if not script_path.exists():
+                logging.error(f"Command executor script not found at {script_path}")
+                # Fallback to direct execution without suspend/resume
+                process = subprocess.Popen(
+                    command, 
+                    shell=True, 
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True
+                )
+                logging.info(f"Direct command execution (no suspend/resume): {command} (PID: {process.pid})")
+            else:
+                # Execute command through the suspend/resume script
+                process = subprocess.Popen(
+                    [str(script_path), command],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True
+                )
+                logging.info(f"Command executed with suspend/resume: {command} (PID: {process.pid})")
             
             # Mark current text length as processed to prevent reprocessing
             current_text_length = getattr(self, '_current_text_length', 0)
