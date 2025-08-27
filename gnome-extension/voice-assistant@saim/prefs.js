@@ -2,11 +2,11 @@ import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
 import Gio from 'gi://Gio';
 
-export default class VoiceAssistantExtensionPreferences {
+import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
+
+export default class VoiceAssistantExtensionPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
-        const settings = new Gio.Settings({
-            schema: 'org.gnome.shell.extensions.voice-assistant'
-        });
+        const settings = this.getSettings();
 
         const page = new Adw.PreferencesPage({
             title: 'Voice Assistant',
