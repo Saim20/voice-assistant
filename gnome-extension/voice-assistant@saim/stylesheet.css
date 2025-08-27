@@ -1,0 +1,57 @@
+/* Voice Assistant Extension Styles */
+
+/* Normal mode - default microphone icon */
+.voice-assistant-normal {
+    color: #ffffff;
+}
+
+/* Command mode - red with pulsing animation */
+.voice-assistant-command {
+    color: #ff6b6b !important;
+    animation: voice-assistant-pulse 1.5s ease-in-out infinite;
+}
+
+/* Typing mode - blue/teal color */
+.voice-assistant-typing {
+    color: #4ecdc4 !important;
+}
+
+/* Listening indicator - slight glow when active */
+.voice-assistant-listening {
+    text-shadow: 0 0 5px currentColor;
+}
+
+/* Pulse animation for command mode */
+@keyframes voice-assistant-pulse {
+    0% { 
+        opacity: 1.0;
+        transform: scale(1.0);
+    }
+    50% { 
+        opacity: 0.7;
+        transform: scale(1.1);
+    }
+    100% { 
+        opacity: 1.0;
+        transform: scale(1.0);
+    }
+}
+
+/* Menu item styles */
+.voice-assistant-mode-item {
+    font-weight: bold;
+}
+
+.voice-assistant-buffer-item {
+    font-family: monospace;
+    font-size: 0.9em;
+    color: #888;
+}
+
+/* Optional label styling (if enabled) */
+.voice-assistant-label {
+    font-size: 0.8em;
+    font-weight: bold;
+    margin-left: 4px;
+    margin-right: 2px;
+}

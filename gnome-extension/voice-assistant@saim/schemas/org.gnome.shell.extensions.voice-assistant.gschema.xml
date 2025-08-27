@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="voice-assistant">
+  <schema id="org.gnome.shell.extensions.voice-assistant" path="/org/gnome/shell/extensions/voice-assistant/">
+    <key name="show-label" type="b">
+      <default>false</default>
+      <summary>Show mode label</summary>
+      <description>Whether to show a text label next to the icon indicating the current mode</description>
+    </key>
+    <key name="notification-enabled" type="b">
+      <default>true</default>
+      <summary>Enable notifications</summary>
+      <description>Whether to show notifications for mode changes and command recognition</description>
+    </key>
+    <key name="update-interval" type="i">
+      <default>1</default>
+      <range min="1" max="10"/>
+      <summary>Update interval</summary>
+      <description>How often to check for file changes (in seconds)</description>
+    </key>
+  </schema>
+</schemalist>
