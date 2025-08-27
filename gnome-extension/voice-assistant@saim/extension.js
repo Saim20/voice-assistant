@@ -19,9 +19,46 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         this.add_child(this._icon);
         
         this._currentMode = 'normal';
+        this._settings = new Gio.Settings({ schema: 'org.gnome.shell.extensions.voice-assistant' });
+        this._setupSettingsHandlers();
         this._setupMenu();
         this._setupFileWatchers();
         this._updateDisplay();
+    }
+    
+    _setupSettingsHandlers() {
+        // Listen for settings changes and update config file
+        this._settings.connect('changed::command-threshold', () => this._updateConfigFile());
+        this._settings.connect('changed::processing-interval', () => this._updateConfigFile());
+        this._settings.connect('changed::hotword', () => this._updateConfigFile());
+    }
+    
+    _updateConfigFile() {
+        try {
+            const configPath = GLib.get_home_dir() + '/.config/nerd-dictation/config.json';
+            const configFile = Gio.File.new_for_path(configPath);
+            
+            if (configFile.query_exists(null)) {
+                let [success, contents] = configFile.load_contents(null);
+                if (success) {
+                    let config = JSON.parse(new TextDecoder().decode(contents));
+                    
+                    // Update config with new settings
+                    config.command_threshold = this._settings.get_int('command-threshold');
+                    config.processing_interval = this._settings.get_double('processing-interval');
+                    config.hotword = this._settings.get_string('hotword');
+                    
+                    // Save updated config
+                    const updatedConfig = JSON.stringify(config, null, 2);
+                    configFile.replace_contents(updatedConfig, null, false, 
+                        Gio.FileCreateFlags.NONE, null);
+                    
+                    console.log('Voice Assistant: Updated config file with new settings');
+                }
+            }
+        } catch (e) {
+            console.log(`Voice Assistant: Error updating config file: ${e}`);
+        }
     }
     
     _setupMenu() {
@@ -53,6 +90,19 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             reactive: false
         });
         this.menu.addMenuItem(this._statusItem);
+        
+        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        
+        // Preferences item
+        this._prefsItem = new PopupMenu.PopupMenuItem('Preferences');
+        this._prefsItem.connect('activate', () => {
+            try {
+                GLib.spawn_command_line_async('gnome-extensions prefs voice-assistant@saim');
+            } catch (e) {
+                console.log(`Voice Assistant: Error opening preferences: ${e}`);
+            }
+        });
+        this.menu.addMenuItem(this._prefsItem);
     }
     
     _setupFileWatchers() {

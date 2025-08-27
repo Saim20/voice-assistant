@@ -1,6 +1,7 @@
 {
   "hotword": "hey",
-  "fuzzy_match_threshold": 85,
+  "command_threshold": 80,
+  "processing_interval": 1.5,
   "logging": {
     "level": "INFO",
     "file": "/tmp/voice_assistant.log"

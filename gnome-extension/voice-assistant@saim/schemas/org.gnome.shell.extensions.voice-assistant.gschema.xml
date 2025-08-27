@@ -17,5 +17,22 @@
       <summary>Update interval</summary>
       <description>How often to check for file changes (in seconds)</description>
     </key>
+    <key name="command-threshold" type="i">
+      <default>80</default>
+      <range min="50" max="100"/>
+      <summary>Command recognition threshold</summary>
+      <description>Minimum confidence percentage required to execute voice commands</description>
+    </key>
+    <key name="processing-interval" type="d">
+      <default>1.5</default>
+      <range min="0.5" max="5.0"/>
+      <summary>Processing interval</summary>
+      <description>Time in seconds to wait before processing buffered speech</description>
+    </key>
+    <key name="hotword" type="s">
+      <default>'hey'</default>
+      <summary>Activation hotword</summary>
+      <description>The word used to activate command mode from normal mode</description>
+    </key>
   </schema>
 </schemalist>
