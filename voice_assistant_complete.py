@@ -55,6 +55,10 @@ class VoiceAssistant:
         self.last_buffer_update_time = time.time()  # Track when buffer was last updated
         self.last_process_call_time = time.time()  # Track when process() was last called
         
+        # Track processed text hashes to prevent reprocessing
+        self._processed_text_hashes = set()
+        self._last_command_time = 0
+        
         # Load commands from configuration
         self.commands = self.load_commands()
         
@@ -517,6 +521,29 @@ class VoiceAssistant:
             )
             
             logging.info(f"Command started successfully: {command} (PID: {process.pid})")
+            
+            # Mark current text length as processed to prevent reprocessing
+            current_text_length = getattr(self, '_current_text_length', 0)
+            current_text = getattr(self, '_current_text', '')
+            
+            if current_text_length > 0:
+                self.update_cursor(current_text_length)
+                logging.info(f"Updated cursor to {current_text_length} after command execution")
+                
+                # Track this text as processed
+                text_hash = hash(current_text.strip().lower())
+                self._processed_text_hashes.add(text_hash)
+                self._last_command_time = time.time()
+                
+                # Clean old hashes (keep last 10)
+                if len(self._processed_text_hashes) > 10:
+                    self._processed_text_hashes = set(list(self._processed_text_hashes)[-10:])
+            
+            # Clear buffer immediately after command execution
+            self.clear_buffer_completely()
+            # Also clear the buffer file for GUI
+            self.save_buffer_to_file("")
+            
             return True
             
         except Exception as e:
@@ -597,14 +624,17 @@ class VoiceAssistant:
                         logging.info(f"Executed command: {best_match} -> {action}")
                     else:
                         logging.info(f"Mode change command: {best_match}")
-                    # Clear buffer completely after successful command execution to prevent accumulation
-                    self.clear_buffer_completely()
-                    break
+                        # Clear buffer for mode changes too
+                        self.clear_buffer_completely()
+                    return ""  # Return immediately after successful command
         else:
             logging.info(f"No command match for: '{text}' (best: {ratio}%, threshold: {self.command_threshold}%)")
-            # If we've tried to process and failed, clear buffer to prevent endless accumulation
-            if len(text) > 20:  # Only clear if text is getting long
-                logging.info("Clearing buffer due to failed long command processing")
+            # Clear buffer more aggressively for failed commands
+            if len(text) > 15:  # Reduced from 20 to 15 characters
+                logging.info("Clearing buffer due to failed command processing")
+                self.clear_buffer_completely()
+            elif ratio < (self.command_threshold - 30):  # Clear if confidence is very low
+                logging.info("Clearing buffer due to very low confidence")
                 self.clear_buffer_completely()
         
         return ""
@@ -693,6 +723,13 @@ class VoiceAssistant:
         last_processed_length = self.get_cursor()
         current_time = time.time()
         
+        # Store current text for use in command execution
+        self._current_text = text
+        self._current_text_length = current_text_length
+        
+        # Create hash of current text to detect reprocessing
+        text_hash = hash(text.strip().lower())
+        
         logging.info(f"Processing text in {current_mode} mode. Text length: {current_text_length}, Last processed: {last_processed_length}")
 
         # Handle text length decreases (nerd-dictation reset or new session)
@@ -702,7 +739,15 @@ class VoiceAssistant:
             self.update_typing_cursor(0)
             self.recognized_text_buffer = ""
             self.buffer_cursor = 0
+            self._processed_text_hashes.clear()  # Clear hash tracking
             last_processed_length = 0
+
+        # Check if we've already processed this exact text recently (within last 5 seconds)
+        if (text_hash in self._processed_text_hashes and 
+            current_time - self._last_command_time < 5.0 and 
+            current_mode == "command"):
+            logging.info("Already processed this text recently, skipping to prevent reprocessing")
+            return ""
 
         # Update buffer for GUI display
         self.save_buffer_to_file(text)
@@ -809,7 +854,7 @@ class VoiceAssistant:
         return False
     
     def _extract_clean_command(self, command_text: str) -> Optional[str]:
-        """Extract a clean command from potentially noisy text"""
+        """Extract a clean command from potentially noisy text, prioritizing the last/most recent command"""
         words = command_text.strip().split()
         if not words:
             return None
@@ -819,21 +864,29 @@ class VoiceAssistant:
         target_words = ['terminal', 'firefox', 'spotify', 'files', 'code', 'calculator', 
                        'overview', 'window', 'copy', 'paste', 'volume', 'screenshot']
         
+        # Find ALL action + target combinations, then take the LAST one
+        found_commands = []
+        
         # Try to find action + target combinations
         for i, word in enumerate(words):
             if word in action_words and i + 1 < len(words):
                 next_word = words[i + 1]
                 if next_word in target_words:
                     clean_command = f"{word} {next_word}"
-                    logging.info(f"Extracted clean command: '{clean_command}' from '{command_text}'")
-                    return clean_command
+                    found_commands.append(clean_command)
         
-        # Also check for single-word commands
+        # Also check for single-word commands at the end
         single_commands = ['copy', 'paste', 'cut', 'undo', 'redo', 'mute', 'cancel', 'stop']
-        for word in words:
+        for word in reversed(words):  # Check from end to prioritize last commands
             if word in single_commands:
-                logging.info(f"Extracted single-word command: '{word}' from '{command_text}'")
-                return word
+                found_commands.append(word)
+                break  # Take the last single command found
+        
+        # Return the LAST command found (most recent)
+        if found_commands:
+            last_command = found_commands[-1]
+            logging.info(f"Extracted clean command: '{last_command}' from '{command_text}' (found {len(found_commands)} commands)")
+            return last_command
         
         # If we find a target word at the end with an action word somewhere, try that
         if words[-1] in target_words:
@@ -900,10 +953,16 @@ class VoiceAssistant:
         self.buffer_cursor = 0
         self.last_buffer_update_time = time.time()
         self.last_process_call_time = time.time()
+        
+        # DON'T reset cursor files here - let execute_command handle cursor updates
+        # This prevents the cursor from being reset and causing reprocessing
+        
+        # Clear the buffer file for GUI immediately
+        self.save_buffer_to_file("")
     
     def check_and_clear_long_buffer(self):
         """Clear buffer if it gets too long to prevent accumulation"""
-        max_buffer_length = 50  # Reduced from 100 to 50 characters to prevent long accumulation
+        max_buffer_length = 150  # Increased from 50 to 150 characters to allow longer command sequences
         if len(self.recognized_text_buffer) > max_buffer_length:
             logging.info(f"Buffer too long ({len(self.recognized_text_buffer)} chars), clearing: '{self.recognized_text_buffer[:30]}...'")
             self.clear_buffer_completely()

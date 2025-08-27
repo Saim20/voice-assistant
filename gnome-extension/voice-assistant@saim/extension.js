@@ -12,13 +12,28 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     _init() {
         super._init(0.0, 'Voice Assistant');
         
+        // Create a horizontal box layout to hold icon and text
+        this._box = new St.BoxLayout({
+            style_class: 'panel-status-menu-box'
+        });
+        this.add_child(this._box);
+        
         this._icon = new St.Icon({
             icon_name: 'audio-input-microphone-symbolic',
             style_class: 'system-status-icon'
         });
-        this.add_child(this._icon);
+        this._box.add_child(this._icon);
+        
+        // Add buffer text label
+        this._bufferLabel = new St.Label({
+            text: '',
+            style_class: 'voice-assistant-buffer-text',
+            y_align: 2  // Middle alignment
+        });
+        this._box.add_child(this._bufferLabel);
         
         this._currentMode = 'normal';
+        this._currentBuffer = '';
         this._settings = new Gio.Settings({ schema: 'org.gnome.shell.extensions.voice-assistant' });
         this._setupSettingsHandlers();
         this._setupMenu();
@@ -91,6 +106,12 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         });
         this.menu.addMenuItem(this._statusItem);
         
+        // Buffer display item
+        this._bufferItem = new PopupMenu.PopupMenuItem('Buffer: (empty)', {
+            reactive: false
+        });
+        this.menu.addMenuItem(this._bufferItem);
+        
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         
         // Preferences item
@@ -117,8 +138,19 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
                 });
             });
             
-            // Initial mode read
+            // Watch buffer file
+            this._bufferFile = Gio.File.new_for_path('/tmp/nerd-dictation.buffer');
+            this._bufferMonitor = this._bufferFile.monitor_file(Gio.FileMonitorFlags.NONE, null);
+            this._bufferMonitor.connect('changed', () => {
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+                    this._onBufferChanged();
+                    return GLib.SOURCE_REMOVE;
+                });
+            });
+            
+            // Initial reads
             this._onModeChanged();
+            this._onBufferChanged();
         } catch (e) {
             console.log(`Voice Assistant: Error setting up file watchers: ${e}`);
         }
@@ -138,6 +170,29 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             }
         } catch (e) {
             console.log(`Voice Assistant: Error reading mode file: ${e}`);
+        }
+    }
+    
+    _onBufferChanged() {
+        try {
+            if (this._bufferFile.query_exists(null)) {
+                let [success, contents] = this._bufferFile.load_contents(null);
+                if (success) {
+                    let newBuffer = new TextDecoder().decode(contents).trim();
+                    if (newBuffer !== this._currentBuffer) {
+                        this._currentBuffer = newBuffer;
+                        this._updateDisplay();
+                    }
+                }
+            } else {
+                // Buffer file doesn't exist, clear buffer
+                if (this._currentBuffer !== '') {
+                    this._currentBuffer = '';
+                    this._updateDisplay();
+                }
+            }
+        } catch (e) {
+            console.log(`Voice Assistant: Error reading buffer file: ${e}`);
         }
     }
     
@@ -164,6 +219,9 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         this._icon.icon_name = iconName;
         this._icon.style_class = styleClass;
         
+        // Update buffer text display
+        this._updateBufferDisplay();
+        
         // Update menu
         if (this._modeItem) {
             this._modeItem.label.text = `Mode: ${this._currentMode.toUpperCase()}`;
@@ -176,7 +234,44 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         
         // Update status
         if (this._statusItem) {
-            this._statusItem.label.text = `Voice Assistant: ${this._currentMode} mode active`;
+            let statusText = `Voice Assistant: ${this._currentMode} mode active`;
+            this._statusItem.label.text = statusText;
+        }
+        
+        // Update buffer item
+        if (this._bufferItem) {
+            if (this._currentBuffer && this._currentBuffer.length > 0) {
+                let bufferText = this._currentBuffer;
+                const maxLength = 50; // Longer limit for menu display
+                if (bufferText.length > maxLength) {
+                    bufferText = bufferText.substring(0, maxLength) + '...';
+                }
+                this._bufferItem.label.text = `Buffer: "${bufferText}"`;
+            } else {
+                this._bufferItem.label.text = 'Buffer: (empty)';
+            }
+        }
+    }
+    
+    _updateBufferDisplay() {
+        if (!this._bufferLabel) return;
+        
+        if (this._currentBuffer && this._currentBuffer.length > 0) {
+            // Truncate buffer text if too long for display
+            let displayText = this._currentBuffer;
+            const maxLength = 25; // Shorter for status bar
+            
+            if (displayText.length > maxLength) {
+                displayText = displayText.substring(0, maxLength) + '...';
+            }
+            
+            // Show the text without quotes for cleaner look
+            this._bufferLabel.text = displayText;
+            this._bufferLabel.visible = true;
+        } else {
+            // Show placeholder text for testing - you can remove this later
+            this._bufferLabel.text = '';
+            this._bufferLabel.visible = false;
         }
     }
     
@@ -194,6 +289,10 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         if (this._modeMonitor) {
             this._modeMonitor.cancel();
             this._modeMonitor = null;
+        }
+        if (this._bufferMonitor) {
+            this._bufferMonitor.cancel();
+            this._bufferMonitor = null;
         }
         super.destroy();
     }
