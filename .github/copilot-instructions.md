@@ -39,14 +39,21 @@ Commands map voice phrases to shell commands via `ydotool` for system control.
 
 # GNOME extension management
 cd gnome-extension && ./install.sh && gnome-extensions enable voice-assistant@saim
+
+# Command execution wrapper (automatic suspend/resume)
+./command_executor.sh "your_command"  # Handles nerd-dictation lifecycle
 ```
 
-### Command Processing
-Automatic processing is enabled with configurable intervals:
+### Command Processing & Execution
+Automatic processing is enabled with configurable intervals and automatic nerd-dictation suspension:
 ```python
 # Commands are processed automatically after processing_interval (default 1.5s)
 # Threshold: 80% confidence required for execution (configurable via extension)
 assistant.process("open terminal")  # Automatically executes after interval
+
+# Commands now execute through command_executor.sh for better control:
+# - Automatic nerd-dictation suspend/resume during command execution
+# - Buffer clearing after execution to prevent interference
 ```
 
 ### Configuration via GNOME Extension
@@ -119,7 +126,7 @@ Local speech recognition models in `model/` directory:
 ## File Locations
 
 **Core:** `voice_assistant_complete.py`, `config.json`  
-**Scripts:** `toggle-nerd.sh`, `stop-nerd.sh`  
+**Scripts:** `toggle-nerd.sh`, `stop-nerd.sh`, `command_executor.sh`  
 **Extension:** `gnome-extension/voice-assistant@saim/`  
 **Models:** `model/` (active), `bak/` (backups)  
 **State:** `/tmp/nerd-dictation.*` files  

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define the path for your single configuration file.
-CONFIG_FILE="$HOME/.config/nerd-dictation/voice_assistant_complete.py"
+CONFIG_FILE="$HOME/.config/nerd-dictation/voice_buffer_writer.py"
 
 # Define the paths for the status, mode, and cursor files.
 STATUS_FILE="/tmp/nerd-dictation.status"
