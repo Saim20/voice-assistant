@@ -1,170 +1,22 @@
 /**
  * CommandEditor.js - Command editing widgets and utilities
- * Provides UI components for editing voice commands and categories
+ * Provides UI components for editing voice commands with simplified structure
  */
 
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
 import GObject from 'gi://GObject';
 
-export const CommandCategoryRow = GObject.registerClass({
-    GTypeName: 'CommandCategoryRow',
-    Template: null,
-}, class CommandCategoryRow extends Adw.ExpanderRow {
-    _init(categoryName, commands, onUpdate) {
+export const CommandListRow = GObject.registerClass({
+    GTypeName: 'CommandListRow',
+}, class CommandListRow extends Adw.ActionRow {
+    _init(commandData, onUpdate, onDelete) {
         super._init({
-            title: this._formatCategoryName(categoryName),
-            subtitle: `${Object.keys(commands).length} commands`,
+            title: commandData.name || 'Unnamed Command',
+            subtitle: `${commandData.command || 'No command'} • ${(commandData.phrases || []).length} phrases`,
         });
 
-        this._categoryName = categoryName;
-        this._commands = commands;
-        this._onUpdate = onUpdate;
-
-        this._buildCommandList();
-        this._addNewCommandButton();
-    }
-
-    _formatCategoryName(name) {
-        return name.split('_').map(word => 
-            word.charAt(0).toUpperCase() + word.slice(1)
-        ).join(' ');
-    }
-
-    _buildCommandList() {
-        for (const [commandKey, phrases] of Object.entries(this._commands)) {
-            const commandRow = new CommandRow(commandKey, phrases, (key, newPhrases) => {
-                this._commands[key] = newPhrases;
-                this._onUpdate(this._categoryName, this._commands);
-                this._updateSubtitle();
-            }, (key) => {
-                delete this._commands[key];
-                this._onUpdate(this._categoryName, this._commands);
-                this._updateSubtitle();
-            });
-            this.add_row(commandRow);
-        }
-    }
-
-    _addNewCommandButton() {
-        const newCommandRow = new Adw.ActionRow({
-            title: 'Add New Command',
-            subtitle: 'Click to add a new voice command',
-        });
-
-        const addButton = new Gtk.Button({
-            icon_name: 'list-add-symbolic',
-            valign: Gtk.Align.CENTER,
-            css_classes: ['flat'],
-        });
-
-        addButton.connect('clicked', () => {
-            this._showNewCommandDialog();
-        });
-
-        newCommandRow.add_suffix(addButton);
-        this.add_row(newCommandRow);
-    }
-
-    _showNewCommandDialog() {
-        const dialog = new Gtk.Dialog({
-            title: 'Add New Command',
-            modal: true,
-            transient_for: this.get_root(),
-        });
-
-        dialog.add_button('Cancel', Gtk.ResponseType.CANCEL);
-        dialog.add_button('Add', Gtk.ResponseType.OK);
-
-        const content = dialog.get_content_area();
-        content.set_spacing(12);
-        content.set_margin_top(12);
-        content.set_margin_bottom(12);
-        content.set_margin_start(12);
-        content.set_margin_end(12);
-
-        const commandGroup = new Adw.PreferencesGroup({
-            title: 'Command Details',
-        });
-
-        const nameRow = new Adw.ActionRow({
-            title: 'Command Name',
-            subtitle: 'Internal name for the command (e.g., "open_terminal")',
-        });
-        const nameEntry = new Gtk.Entry({
-            placeholder_text: 'command_name',
-            valign: Gtk.Align.CENTER,
-        });
-        nameRow.add_suffix(nameEntry);
-        commandGroup.add(nameRow);
-
-        const phrasesRow = new Adw.ActionRow({
-            title: 'Voice Phrases',
-            subtitle: 'Comma-separated phrases that trigger this command',
-        });
-        const phrasesEntry = new Gtk.Entry({
-            placeholder_text: 'open terminal, start terminal, launch terminal',
-            valign: Gtk.Align.CENTER,
-        });
-        phrasesRow.add_suffix(phrasesEntry);
-        commandGroup.add(phrasesRow);
-
-        content.append(commandGroup);
-
-        dialog.connect('response', (dialog, response) => {
-            if (response === Gtk.ResponseType.OK) {
-                const commandName = nameEntry.get_text().trim();
-                const phrasesText = phrasesEntry.get_text().trim();
-
-                if (commandName && phrasesText) {
-                    const phrases = phrasesText.split(',').map(p => p.trim()).filter(p => p);
-                    this._commands[commandName] = phrases;
-                    
-                    // Add the new command row
-                    const commandRow = new CommandRow(commandName, phrases, (key, newPhrases) => {
-                        this._commands[key] = newPhrases;
-                        this._onUpdate(this._categoryName, this._commands);
-                        this._updateSubtitle();
-                    }, (key) => {
-                        delete this._commands[key];
-                        this._onUpdate(this._categoryName, this._commands);
-                        this._updateSubtitle();
-                    });
-                    
-                    // Insert before the "Add New Command" button
-                    const rows = [];
-                    for (let i = 0; i < this.get_n_rows(); i++) {
-                        rows.push(this.get_row_at_index(i));
-                    }
-                    const addButtonRow = rows[rows.length - 1];
-                    this.insert_row_before(commandRow, addButtonRow);
-                    
-                    this._onUpdate(this._categoryName, this._commands);
-                    this._updateSubtitle();
-                }
-            }
-            dialog.close();
-        });
-
-        dialog.present();
-    }
-
-    _updateSubtitle() {
-        this.set_subtitle(`${Object.keys(this._commands).length} commands`);
-    }
-});
-
-export const CommandRow = GObject.registerClass({
-    GTypeName: 'CommandRow',
-}, class CommandRow extends Adw.ActionRow {
-    _init(commandKey, phrases, onUpdate, onDelete) {
-        super._init({
-            title: commandKey.replace(/_/g, ' '),
-            subtitle: Array.isArray(phrases) ? phrases.join(', ') : phrases,
-        });
-
-        this._commandKey = commandKey;
-        this._phrases = phrases;
+        this._commandData = commandData;
         this._onUpdate = onUpdate;
         this._onDelete = onDelete;
 
@@ -177,7 +29,7 @@ export const CommandRow = GObject.registerClass({
             icon_name: 'document-edit-symbolic',
             valign: Gtk.Align.CENTER,
             css_classes: ['flat'],
-            tooltip_text: 'Edit command phrases',
+            tooltip_text: 'Edit command',
         });
 
         editButton.connect('clicked', () => {
@@ -204,9 +56,11 @@ export const CommandRow = GObject.registerClass({
 
     _showEditDialog() {
         const dialog = new Gtk.Dialog({
-            title: `Edit Command: ${this._commandKey}`,
+            title: 'Edit Command',
             modal: true,
             transient_for: this.get_root(),
+            default_width: 500,
+            default_height: 400,
         });
 
         dialog.add_button('Cancel', Gtk.ResponseType.CANCEL);
@@ -219,56 +73,162 @@ export const CommandRow = GObject.registerClass({
         content.set_margin_start(12);
         content.set_margin_end(12);
 
-        const phrasesGroup = new Adw.PreferencesGroup({
-            title: 'Voice Phrases',
-            description: 'Enter comma-separated phrases that should trigger this command',
+        // Command details group
+        const commandGroup = new Adw.PreferencesGroup({
+            title: 'Command Details',
         });
 
-        const phrasesEntry = new Gtk.Entry({
-            text: Array.isArray(this._phrases) ? this._phrases.join(', ') : this._phrases,
+        // Name entry
+        const nameRow = new Adw.ActionRow({
+            title: 'Display Name',
+            subtitle: 'Friendly name for this command',
+        });
+        const nameEntry = new Gtk.Entry({
+            text: this._commandData.name || '',
+            placeholder_text: 'e.g., Terminal',
             valign: Gtk.Align.CENTER,
         });
+        nameRow.add_suffix(nameEntry);
+        commandGroup.add(nameRow);
 
-        const phrasesRow = new Adw.ActionRow({
-            title: 'Phrases',
+        // Command entry
+        const commandRow = new Adw.ActionRow({
+            title: 'Shell Command',
+            subtitle: 'The actual command to execute',
         });
-        phrasesRow.add_suffix(phrasesEntry);
-        phrasesGroup.add(phrasesRow);
+        const commandEntry = new Gtk.Entry({
+            text: this._commandData.command || '',
+            placeholder_text: 'e.g., kgx or ydotool key 29:1 46:1 46:0 29:0',
+            valign: Gtk.Align.CENTER,
+        });
+        commandRow.add_suffix(commandEntry);
+        commandGroup.add(commandRow);
 
+        content.append(commandGroup);
+
+        // Phrases group
+        const phrasesGroup = new Adw.PreferencesGroup({
+            title: 'Voice Phrases',
+            description: 'Add the phrases you want to say to trigger this command',
+        });
+
+        const phrasesScrolled = new Gtk.ScrolledWindow({
+            height_request: 200,
+            has_frame: true,
+        });
+
+        const phrasesListBox = new Gtk.ListBox({
+            css_classes: ['boxed-list'],
+        });
+
+        phrasesScrolled.set_child(phrasesListBox);
+
+        // Add existing phrases
+        const phrases = this._commandData.phrases || [];
+        const phraseEntries = [];
+
+        phrases.forEach(phrase => {
+            const entry = this._createPhraseEntry(phrase, phrasesListBox);
+            phraseEntries.push(entry);
+        });
+
+        // Add new phrase button
+        const addPhraseButton = new Gtk.Button({
+            label: 'Add Phrase',
+            icon_name: 'list-add-symbolic',
+            css_classes: ['flat'],
+        });
+
+        addPhraseButton.connect('clicked', () => {
+            const entry = this._createPhraseEntry('', phrasesListBox);
+            phraseEntries.push(entry);
+            entry.grab_focus();
+        });
+
+        phrasesGroup.add(phrasesScrolled);
+        phrasesGroup.add(addPhraseButton);
         content.append(phrasesGroup);
 
         dialog.connect('response', (dialog, response) => {
             if (response === Gtk.ResponseType.OK) {
-                const newPhrasesText = phrasesEntry.get_text().trim();
-                if (newPhrasesText) {
-                    const newPhrases = newPhrasesText.split(',').map(p => p.trim()).filter(p => p);
-                    this._phrases = newPhrases;
-                    this.set_subtitle(newPhrases.join(', '));
-                    this._onUpdate(this._commandKey, newPhrases);
+                // Collect data
+                const newData = {
+                    name: nameEntry.get_text().trim(),
+                    command: commandEntry.get_text().trim(),
+                    phrases: phraseEntries
+                        .map(entry => entry.get_text().trim())
+                        .filter(phrase => phrase.length > 0)
+                };
+
+                if (newData.name && newData.command && newData.phrases.length > 0) {
+                    this._commandData = newData;
+                    this._updateDisplay();
+                    this._onUpdate(newData);
+                } else {
+                    // Show error - all fields required
+                    const toast = new Adw.Toast({
+                        title: 'Please fill in all fields and add at least one phrase',
+                        timeout: 3,
+                    });
+                    
+                    if (this.get_root().add_toast) {
+                        this.get_root().add_toast(toast);
+                    }
                 }
             }
-            dialog.close();
+            dialog.destroy();
         });
 
         dialog.present();
+    }
+
+    _createPhraseEntry(text, listBox) {
+        const row = new Adw.ActionRow();
+        
+        const entry = new Gtk.Entry({
+            text: text,
+            placeholder_text: 'e.g., open terminal',
+            hexpand: true,
+        });
+
+        const deleteButton = new Gtk.Button({
+            icon_name: 'user-trash-symbolic',
+            valign: Gtk.Align.CENTER,
+            css_classes: ['flat', 'destructive-action'],
+        });
+
+        deleteButton.connect('clicked', () => {
+            listBox.remove(row);
+        });
+
+        row.add_suffix(entry);
+        row.add_suffix(deleteButton);
+        listBox.append(row);
+
+        return entry;
+    }
+
+    _updateDisplay() {
+        this.set_title(this._commandData.name || 'Unnamed Command');
+        this.set_subtitle(`${this._commandData.command || 'No command'} • ${(this._commandData.phrases || []).length} phrases`);
     }
 
     _showDeleteConfirmation() {
         const dialog = new Gtk.MessageDialog({
             modal: true,
             transient_for: this.get_root(),
-            message_type: Gtk.MessageType.QUESTION,
-            buttons: Gtk.ButtonsType.YES_NO,
-            text: 'Delete Command?',
-            secondary_text: `Are you sure you want to delete the command "${this._commandKey}"? This action cannot be undone.`,
+            text: 'Delete Command',
+            secondary_text: `Are you sure you want to delete "${this._commandData.name}"?`,
         });
 
+        dialog.add_button('Cancel', Gtk.ResponseType.CANCEL);
+        dialog.add_button('Delete', Gtk.ResponseType.OK);
+
         dialog.connect('response', (dialog, response) => {
-            if (response === Gtk.ResponseType.YES) {
-                this._onDelete(this._commandKey);
-                this.get_parent().remove(this);
+            if (response === Gtk.ResponseType.OK) {
+                this._onDelete();
             }
-            dialog.close();
+            dialog.destroy();
         });
 
         dialog.present();
@@ -280,73 +240,166 @@ export class CommandManager {
         this._configManager = configManager;
     }
 
-    /**
-     * Get all command categories
-     */
-    getCategories() {
-        const config = this._configManager.getConfig();
-        return config.commands || {};
+    createCommandsGroup() {
+        const group = new Adw.PreferencesGroup({
+            title: 'Voice Commands',
+            description: 'Manage voice commands and their associated actions',
+        });
+
+        const commandsListBox = new Gtk.ListBox({
+            css_classes: ['boxed-list'],
+        });
+
+        const scrolled = new Gtk.ScrolledWindow({
+            height_request: 300,
+            has_frame: true,
+        });
+        scrolled.set_child(commandsListBox);
+
+        this._loadCommands(commandsListBox);
+
+        // Add new command button
+        const addButton = new Gtk.Button({
+            label: 'Add New Command',
+            icon_name: 'list-add-symbolic',
+            css_classes: ['suggested-action'],
+        });
+
+        addButton.connect('clicked', () => {
+            this._showNewCommandDialog(commandsListBox);
+        });
+
+        group.add(scrolled);
+        group.add(addButton);
+
+        return group;
     }
 
-    /**
-     * Update a command category
-     */
-    updateCategory(categoryName, commands) {
-        const config = this._configManager.getConfig();
-        if (!config.commands) {
-            config.commands = {};
+    _loadCommands(listBox) {
+        // Clear existing rows
+        let child = listBox.get_first_child();
+        while (child) {
+            const next = child.get_next_sibling();
+            listBox.remove(child);
+            child = next;
         }
-        config.commands[categoryName] = commands;
-        return this._configManager.saveConfig(config);
-    }
 
-    /**
-     * Add a new category
-     */
-    addCategory(categoryName) {
         const config = this._configManager.getConfig();
-        if (!config.commands) {
-            config.commands = {};
-        }
-        config.commands[categoryName] = {};
-        return this._configManager.saveConfig(config);
+        const commands = config.commands || [];
+
+        commands.forEach((commandData, index) => {
+            const row = new CommandListRow(
+                commandData,
+                (updatedData) => {
+                    this._updateCommand(index, updatedData);
+                },
+                () => {
+                    this._deleteCommand(index);
+                    this._loadCommands(listBox);
+                }
+            );
+            listBox.append(row);
+        });
     }
 
-    /**
-     * Delete a category
-     */
-    deleteCategory(categoryName) {
+    _updateCommand(index, newData) {
         const config = this._configManager.getConfig();
-        if (config.commands && config.commands[categoryName]) {
-            delete config.commands[categoryName];
-            return this._configManager.saveConfig(config);
+        if (config.commands && config.commands[index]) {
+            config.commands[index] = newData;
+            this._configManager.saveConfig(config);
         }
-        return false;
     }
 
-    /**
-     * Get command statistics
-     */
-    getStats() {
-        const categories = this.getCategories();
-        let totalCommands = 0;
-        let totalPhrases = 0;
+    _deleteCommand(index) {
+        const config = this._configManager.getConfig();
+        if (config.commands && config.commands[index]) {
+            config.commands.splice(index, 1);
+            this._configManager.saveConfig(config);
+        }
+    }
 
-        for (const [categoryName, commands] of Object.entries(categories)) {
-            totalCommands += Object.keys(commands).length;
-            for (const phrases of Object.values(commands)) {
-                if (Array.isArray(phrases)) {
-                    totalPhrases += phrases.length;
-                } else {
-                    totalPhrases += 1;
+    _showNewCommandDialog(listBox) {
+        const dialog = new Gtk.Dialog({
+            title: 'Add New Command',
+            modal: true,
+            transient_for: listBox.get_root(),
+            default_width: 500,
+        });
+
+        dialog.add_button('Cancel', Gtk.ResponseType.CANCEL);
+        dialog.add_button('Add', Gtk.ResponseType.OK);
+
+        const content = dialog.get_content_area();
+        content.set_spacing(12);
+        content.set_margin_top(12);
+        content.set_margin_bottom(12);
+        content.set_margin_start(12);
+        content.set_margin_end(12);
+
+        const group = new Adw.PreferencesGroup({
+            title: 'New Command',
+        });
+
+        const nameRow = new Adw.ActionRow({
+            title: 'Display Name',
+            subtitle: 'Friendly name for this command',
+        });
+        const nameEntry = new Gtk.Entry({
+            placeholder_text: 'e.g., Terminal',
+            valign: Gtk.Align.CENTER,
+        });
+        nameRow.add_suffix(nameEntry);
+        group.add(nameRow);
+
+        const commandRow = new Adw.ActionRow({
+            title: 'Shell Command',
+            subtitle: 'The actual command to execute',
+        });
+        const commandEntry = new Gtk.Entry({
+            placeholder_text: 'e.g., kgx',
+            valign: Gtk.Align.CENTER,
+        });
+        commandRow.add_suffix(commandEntry);
+        group.add(commandRow);
+
+        const phraseRow = new Adw.ActionRow({
+            title: 'First Phrase',
+            subtitle: 'Add at least one voice phrase',
+        });
+        const phraseEntry = new Gtk.Entry({
+            placeholder_text: 'e.g., open terminal',
+            valign: Gtk.Align.CENTER,
+        });
+        phraseRow.add_suffix(phraseEntry);
+        group.add(phraseRow);
+
+        content.append(group);
+
+        dialog.connect('response', (dialog, response) => {
+            if (response === Gtk.ResponseType.OK) {
+                const name = nameEntry.get_text().trim();
+                const command = commandEntry.get_text().trim();
+                const phrase = phraseEntry.get_text().trim();
+
+                if (name && command && phrase) {
+                    const newCommand = {
+                        name: name,
+                        command: command,
+                        phrases: [phrase]
+                    };
+
+                    const config = this._configManager.getConfig();
+                    if (!config.commands) {
+                        config.commands = [];
+                    }
+                    config.commands.push(newCommand);
+                    this._configManager.saveConfig(config);
+                    this._loadCommands(listBox);
                 }
             }
-        }
+            dialog.destroy();
+        });
 
-        return {
-            categories: Object.keys(categories).length,
-            commands: totalCommands,
-            phrases: totalPhrases,
-        };
+        dialog.present();
     }
 }

@@ -12,7 +12,7 @@ import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/ex
 
 // Import our modular components
 import {ConfigManager} from './lib/ConfigManager.js';
-import {CommandCategoryRow, CommandManager} from './lib/CommandEditor.js';
+import {CommandManager} from './lib/CommandEditor.js';
 import {PreferencesBuilder, StatusManager} from './lib/PreferencesWidgets.js';
 
 export default class VoiceAssistantExtensionPreferences extends ExtensionPreferences {
@@ -217,50 +217,23 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
             'Overview of your current voice commands'
         );
 
-        const stats = this._commandManager.getStats();
+        const stats = this._getCommandStats();
         this._prefsBuilder.createInfoRow(
-            'Categories',
-            `${stats.categories} command categories configured`,
+            'Total Commands',
+            `${stats.totalCommands} commands configured`,
             statsGroup
         );
 
         this._prefsBuilder.createInfoRow(
-            'Commands',
-            `${stats.commands} total commands available`,
-            statsGroup
-        );
-
-        this._prefsBuilder.createInfoRow(
-            'Phrases',
-            `${stats.phrases} voice phrases recognized`,
+            'Total Phrases',
+            `${stats.totalPhrases} voice phrases available`,
             statsGroup
         );
 
         page.add(statsGroup);
 
-        // Commands group
-        const commandsGroup = this._prefsBuilder.createGroup(
-            'Voice Commands',
-            'Configure voice commands and their trigger phrases'
-        );
-
-        // Add category rows
-        const categories = this._commandManager.getCategories();
-        for (const [categoryName, commands] of Object.entries(categories)) {
-            const categoryRow = new CommandCategoryRow(
-                categoryName, 
-                commands, 
-                (catName, updatedCommands) => {
-                    this._commandManager.updateCategory(catName, updatedCommands);
-                    this._refreshCommandStats(statsGroup, window);
-                }
-            );
-            commandsGroup.add(categoryRow);
-        }
-
-        // Add new category button
-        this._addNewCategoryButton(commandsGroup, window, statsGroup);
-
+        // Commands management group using new simplified system
+        const commandsGroup = this._commandManager.createCommandsGroup();
         page.add(commandsGroup);
 
         // Actions group
@@ -280,16 +253,16 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
 
         this._prefsBuilder.createButtonRow(
             'Export Commands',
-            'Export your command configuration to a backup file',
+            'Export your command configuration to a file',
             'Export',
-            'document-save-as-symbolic',
+            'document-save-symbolic',
             () => this._exportCommands(window),
             actionsGroup
         );
 
         this._prefsBuilder.createButtonRow(
             'Import Commands',
-            'Import command configuration from a backup file',
+            'Import command configuration from a file',
             'Import',
             'document-open-symbolic',
             () => this._importCommands(window),
@@ -298,6 +271,21 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
 
         page.add(actionsGroup);
         window.add(page);
+    }
+
+    _getCommandStats() {
+        const config = this._configManager.getConfig();
+        const commands = config.commands || [];
+        
+        const totalCommands = commands.length;
+        const totalPhrases = commands.reduce((sum, cmd) => {
+            return sum + (cmd.phrases ? cmd.phrases.length : 0);
+        }, 0);
+
+        return {
+            totalCommands,
+            totalPhrases
+        };
     }
 
     _createAdvancedPage(window, settings) {

@@ -6,152 +6,226 @@
     "level": "INFO",
     "file": "/tmp/voice_assistant.log"
   },
-  "commands": {
-    "applications": {
-      "terminal": [
+  "commands": [
+    {
+      "name": "Terminal",
+      "command": "kgx",
+      "phrases": [
         "open terminal",
         "start terminal",
         "launch terminal"
-      ],
-      "firefox": [
+      ]
+    },
+    {
+      "name": "Firefox",
+      "command": "firefox",
+      "phrases": [
         "open firefox",
         "launch firefox",
         "start web browser"
-      ],
-      "files": [
+      ]
+    },
+    {
+      "name": "Files",
+      "command": "nautilus",
+      "phrases": [
         "open files",
         "launch files",
         "start file manager"
-      ],
-      "spotify": [
+      ]
+    },
+    {
+      "name": "Spotify",
+      "command": "spotify",
+      "phrases": [
         "open spotify",
         "launch spotify",
         "start music"
-      ],
-      "code": [
+      ]
+    },
+    {
+      "name": "VS Code",
+      "command": "code",
+      "phrases": [
         "open code",
         "launch code",
         "start vscode"
-      ],
-      "calculator": [
+      ]
+    },
+    {
+      "name": "Calculator",
+      "command": "gnome-calculator",
+      "phrases": [
         "open calculator",
         "launch calculator"
       ]
     },
-    "window_management": {
-      "show_overview": [
+    {
+      "name": "Show Overview",
+      "command": "ydotool key 125:1 125:0",
+      "phrases": [
         "show overview",
         "show windows"
-      ],
-      "move_left": [
+      ]
+    },
+    {
+      "name": "Move Left",
+      "command": "ydotool key 125:1 30:1 30:0 125:0",
+      "phrases": [
         "move left",
         "go left",
         "left desktop"
-      ],
-      "move_right": [
+      ]
+    },
+    {
+      "name": "Move Right",
+      "command": "ydotool key 125:1 32:1 32:0 125:0",
+      "phrases": [
         "move right",
         "go right",
         "right desktop"
-      ],
-      "switch_window": [
+      ]
+    },
+    {
+      "name": "Switch Window",
+      "command": "ydotool key 56:1 15:1 15:0 56:0",
+      "phrases": [
         "switch window",
         "next window"
-      ],
-      "new_tab": [
+      ]
+    },
+    {
+      "name": "New Tab",
+      "command": "ydotool key 29:1 15:1 15:0 29:0",
+      "phrases": [
         "new tab",
         "next tab"
-      ],
-      "close_window": [
+      ]
+    },
+    {
+      "name": "Close Window",
+      "command": "ydotool key 29:1 16:1 16:0 29:0",
+      "phrases": [
         "close window",
         "close tab"
-      ],
-      "minimize": [
+      ]
+    },
+    {
+      "name": "Minimize",
+      "command": "ydotool key 125:1 36:1 36:0 125:0",
+      "phrases": [
         "minimize window",
         "minimize"
-      ],
-      "maximize": [
+      ]
+    },
+    {
+      "name": "Maximize",
+      "command": "ydotool key 125:1 17:1 17:0 125:0",
+      "phrases": [
         "maximize window",
         "maximize"
       ]
     },
-    "text_editing": {
-      "copy": [
+    {
+      "name": "Copy",
+      "command": "ydotool key 29:1 46:1 46:0 29:0",
+      "phrases": [
         "copy",
         "copy text"
-      ],
-      "paste": [
+      ]
+    },
+    {
+      "name": "Paste",
+      "command": "ydotool key 29:1 47:1 47:0 29:0",
+      "phrases": [
         "paste",
         "paste text"
-      ],
-      "cut": [
+      ]
+    },
+    {
+      "name": "Cut",
+      "command": "ydotool key 29:1 45:1 45:0 29:0",
+      "phrases": [
         "cut",
         "cut text"
-      ],
-      "undo": [
+      ]
+    },
+    {
+      "name": "Undo",
+      "command": "ydotool key 29:1 44:1 44:0 29:0",
+      "phrases": [
         "undo",
         "undo last"
-      ],
-      "redo": [
+      ]
+    },
+    {
+      "name": "Redo",
+      "command": "ydotool key 29:1 21:1 21:0 29:0",
+      "phrases": [
         "redo",
         "redo last"
-      ],
-      "select_all": [
+      ]
+    },
+    {
+      "name": "Select All",
+      "command": "ydotool key 29:1 30:1 30:0 29:0",
+      "phrases": [
         "select all",
         "select everything"
       ]
     },
-    "system": {
-      "volume_up": [
+    {
+      "name": "Volume Up",
+      "command": "ydotool key 115:1 115:0",
+      "phrases": [
         "volume up",
         "turn up the volume",
         "increase volume"
-      ],
-      "volume_down": [
+      ]
+    },
+    {
+      "name": "Volume Down",
+      "command": "ydotool key 114:1 114:0",
+      "phrases": [
         "volume down",
         "turn down the volume",
         "decrease volume"
-      ],
-      "mute": [
+      ]
+    },
+    {
+      "name": "Mute",
+      "command": "ydotool key 113:1 113:0",
+      "phrases": [
         "mute",
         "mute audio",
         "silence"
-      ],
-      "lock_screen": [
+      ]
+    },
+    {
+      "name": "Lock Screen",
+      "command": "ydotool key 125:1 46:1 46:0 125:0",
+      "phrases": [
         "lock screen",
         "lock my screen"
-      ],
-      "screenshot": [
+      ]
+    },
+    {
+      "name": "Screenshot",
+      "command": "ydotool key 107:1 107:0",
+      "phrases": [
         "screenshot",
         "take screenshot"
-      ],
-      "sleep": [
+      ]
+    },
+    {
+      "name": "Sleep",
+      "command": "systemctl suspend",
+      "phrases": [
         "sleep",
         "suspend"
       ]
-    },
-    "modes": {
-      "typing_mode": [
-        "go to typing mode",
-        "typing mode",
-        "start typing"
-      ],
-      "normal_mode": [
-        "go to normal mode",
-        "normal mode",
-        "stop typing",
-        "exit typing"
-      ],
-      "command_mode": [
-        "go to command mode",
-        "command mode"
-      ],
-      "cancel": [
-        "cancel",
-        "stop",
-        "nevermind"
-      ]
     }
-  },
+  ],
   "typing_mode": {
     "exit_phrases": [
       "stop typing",

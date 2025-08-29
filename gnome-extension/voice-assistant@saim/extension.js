@@ -66,16 +66,14 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         this._allPhrases = [];
         
         try {
-            const commands = this._config.commands || {};
+            const commands = this._config.commands || [];
             
-            for (const [category, categoryCommands] of Object.entries(commands)) {
-                for (const [action, phrases] of Object.entries(categoryCommands)) {
-                    if (Array.isArray(phrases)) {
-                        // Store command mapping
-                        for (const phrase of phrases) {
-                            this._commands[phrase.toLowerCase()] = action;
-                            this._allPhrases.push(phrase.toLowerCase());
-                        }
+            // New simplified structure: each command has name, command, and phrases
+            for (const commandDef of commands) {
+                if (commandDef.phrases && Array.isArray(commandDef.phrases) && commandDef.command) {
+                    for (const phrase of commandDef.phrases) {
+                        this._commands[phrase.toLowerCase()] = commandDef.command;
+                        this._allPhrases.push(phrase.toLowerCase());
                     }
                 }
             }
