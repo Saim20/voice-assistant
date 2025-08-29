@@ -7,6 +7,9 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
+// Import modular components
+import {ConfigManager} from './lib/ConfigManager.js';
+
 const VoiceAssistantIndicator = GObject.registerClass(
 class VoiceAssistantIndicator extends PanelMenu.Button {
     _init() {
@@ -42,50 +45,20 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         this._processingTimer = null;
         this._bufferClearTimer = null;
         
-        // Load configuration
+        // Load configuration using ConfigManager
         this._settings = new Gio.Settings({ schema: 'org.gnome.shell.extensions.voice-assistant' });
-        this._loadConfig();
+        this._configManager = new ConfigManager(this._settings);
+        this._config = this._configManager.getConfig();
         
         this._setupSettingsHandlers();
         this._setupMenu();
         this._setupFileWatchers();
         this._updateDisplay();
         
-        console.log('Voice Assistant: Initialized with persistent state management');
-    }
-    
-    _loadConfig() {
-        try {
-            const configPath = GLib.get_home_dir() + '/.config/nerd-dictation/config.json';
-            const configFile = Gio.File.new_for_path(configPath);
-            
-            if (configFile.query_exists(null)) {
-                let [success, contents] = configFile.load_contents(null);
-                if (success) {
-                    this._config = JSON.parse(new TextDecoder().decode(contents));
-                    console.log('Voice Assistant: Loaded configuration');
-                } else {
-                    this._config = this._getDefaultConfig();
-                }
-            } else {
-                this._config = this._getDefaultConfig();
-            }
-        } catch (e) {
-            console.log(`Voice Assistant: Error loading config: ${e}`);
-            this._config = this._getDefaultConfig();
-        }
-        
-        // Load commands and create phrase lookup
+        // Load commands using the config manager
         this._loadCommands();
-    }
-    
-    _getDefaultConfig() {
-        return {
-            hotword: "hey",
-            command_threshold: 80,
-            processing_interval: 1.5,
-            commands: {}
-        };
+        
+        console.log('Voice Assistant: Initialized with persistent state management');
     }
     
     _loadCommands() {
@@ -114,43 +87,25 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     }
     
     _setupSettingsHandlers() {
-        // Listen for settings changes and update config file
-        this._settings.connect('changed::command-threshold', () => this._updateConfigFile());
-        this._settings.connect('changed::processing-interval', () => this._updateConfigFile());
-        this._settings.connect('changed::hotword', () => this._updateConfigFile());
-    }
-    
-    _updateConfigFile() {
-        try {
-            const configPath = GLib.get_home_dir() + '/.config/nerd-dictation/config.json';
-            const configFile = Gio.File.new_for_path(configPath);
-            
-            if (configFile.query_exists(null)) {
-                let [success, contents] = configFile.load_contents(null);
-                if (success) {
-                    let config = JSON.parse(new TextDecoder().decode(contents));
-                    
-                    // Update config with new settings
-                    config.command_threshold = this._settings.get_int('command-threshold');
-                    config.processing_interval = this._settings.get_double('processing-interval');
-                    config.hotword = this._settings.get_string('hotword');
-                    
-                    // Update internal config
-                    this._config.command_threshold = config.command_threshold;
-                    this._config.processing_interval = config.processing_interval;
-                    this._config.hotword = config.hotword;
-                    
-                    // Save updated config
-                    const updatedConfig = JSON.stringify(config, null, 2);
-                    configFile.replace_contents(updatedConfig, null, false, 
-                        Gio.FileCreateFlags.NONE, null);
-                    
-                    console.log('Voice Assistant: Updated config file with new settings');
+        // Listen for settings changes and update config file if auto-sync is enabled
+        const syncableKeys = ['command-threshold', 'processing-interval', 'hotword'];
+        
+        syncableKeys.forEach(key => {
+            this._settings.connect(`changed::${key}`, () => {
+                if (this._settings.get_boolean('auto-sync')) {
+                    this._configManager.syncSettingsToConfig();
+                    // Reload config to get the updated values
+                    this._config = this._configManager.getConfig();
                 }
+            });
+        });
+        
+        // Also watch for auto-sync setting changes
+        this._settings.connect('changed::auto-sync', () => {
+            if (this._settings.get_boolean('auto-sync')) {
+                this._configManager.syncSettingsToConfig();
             }
-        } catch (e) {
-            console.log(`Voice Assistant: Error updating config file: ${e}`);
-        }
+        });
     }
     
     _setupMenu() {
@@ -160,6 +115,22 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         });
         this.menu.addMenuItem(this._modeItem);
         
+        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        
+        // Nerd-dictation control section
+        this._controlItem = new PopupMenu.PopupMenuItem('Voice Assistant: Checking...', {
+            reactive: false
+        });
+        this.menu.addMenuItem(this._controlItem);
+        
+        this._startItem = new PopupMenu.PopupMenuItem('Start Voice Assistant');
+        this._startItem.connect('activate', () => this._startNerdDictation());
+        this.menu.addMenuItem(this._startItem);
+
+        this._stopItem = new PopupMenu.PopupMenuItem('Stop Voice Assistant');
+        this._stopItem.connect('activate', () => this._stopNerdDictation());
+        this.menu.addMenuItem(this._stopItem);
+
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         
         // Mode switching buttons
@@ -207,6 +178,15 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             }
         });
         this.menu.addMenuItem(this._prefsItem);
+        
+        // Update control status
+        this._updateControlStatus();
+        
+        // Set up periodic status checking
+        this._statusTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 5, () => {
+            this._updateControlStatus();
+            return GLib.SOURCE_CONTINUE;
+        });
     }
     
     _setupFileWatchers() {
@@ -215,7 +195,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             this._modeFile = Gio.File.new_for_path('/tmp/nerd-dictation.mode');
             this._modeMonitor = this._modeFile.monitor_file(Gio.FileMonitorFlags.NONE, null);
             this._modeMonitor.connect('changed', () => {
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
                     this._onModeChanged();
                     return GLib.SOURCE_REMOVE;
                 });
@@ -324,7 +304,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     _processNormalMode(text) {
         // Look for hotword
         const hotword = this._config.hotword || 'hey';
-        const words = text.toLowerCase().split(/\\s+/);
+        const words = text.toLowerCase().split(/\s+/);
         const hotwordRatio = this._getBestWordMatch(words, hotword.toLowerCase());
         
         console.log(`Voice Assistant: Hotword "${hotword}" confidence: ${hotwordRatio}%`);
@@ -398,7 +378,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             console.log(`Voice Assistant: No matching command found (best: ${bestRatio}%)`);
             
             // Clear buffer if no match and substantial text
-            if (text.split(/\\s+/).length >= 3) {
+            if (text.split(/\s+/).length >= 3) {
                 this._scheduleBufferClear(1000);
             }
         }
@@ -666,6 +646,115 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             }
         }
     }
+
+    _updateControlStatus() {
+        try {
+            // Check if nerd-dictation is running
+            this._isNerdDictationRunning((isRunning) => {
+                if (this._controlItem) {
+                    this._controlItem.label.text = isRunning ? 
+                        'Voice Assistant: Running' : 
+                        'Voice Assistant: Stopped';
+                }
+                
+                // Show/hide appropriate control items based on running status
+                if (this._startItem) {
+                    this._startItem.visible = !isRunning;
+                }
+                
+                if (this._stopItem) {
+                    this._stopItem.visible = isRunning;
+                }
+                
+                // Update mode controls sensitivity based on running status
+                const modeControlsEnabled = isRunning;
+                if (this._normalModeItem) this._normalModeItem.setSensitive(modeControlsEnabled && this._currentMode !== 'normal');
+                if (this._commandModeItem) this._commandModeItem.setSensitive(modeControlsEnabled && this._currentMode !== 'command');
+                if (this._typingModeItem) this._typingModeItem.setSensitive(modeControlsEnabled && this._currentMode !== 'typing');
+            });
+        } catch (e) {
+            console.log(`Voice Assistant: Error updating control status: ${e}`);
+        }
+    }
+
+    _isNerdDictationRunning(callback) {
+        try {
+            // Check status file first
+            const statusFile = Gio.File.new_for_path('/tmp/nerd-dictation.status');
+            if (statusFile.query_exists(null)) {
+                callback(true);
+                return;
+            }
+            
+            // Fallback: check for running process synchronously (use specific pattern)
+            try {
+                const [success, stdout] = GLib.spawn_command_line_sync('pgrep -f "nerd-dictation begin"');
+                const isRunning = success && stdout.length > 0;
+                callback(isRunning);
+            } catch (e) {
+                callback(false);
+            }
+        } catch (e) {
+            callback(false);
+        }
+    }
+
+    _startNerdDictation() {
+        try {
+            const scriptPath = GLib.get_home_dir() + '/.config/nerd-dictation/start-nerd.sh';
+            const scriptFile = Gio.File.new_for_path(scriptPath);
+            
+            if (scriptFile.query_exists(null)) {
+                console.log('Voice Assistant: Starting nerd-dictation via script');
+                GLib.spawn_command_line_async(`${scriptPath}`);
+                
+                // Update status after a delay
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
+                    this._updateControlStatus();
+                    return GLib.SOURCE_REMOVE;
+                });
+            } else {
+                console.log('Voice Assistant: start-nerd.sh script not found');
+                this._showNotification('Error', 'Start script not found at ' + scriptPath);
+            }
+        } catch (e) {
+            console.log(`Voice Assistant: Error starting nerd-dictation: ${e}`);
+            this._showNotification('Error', 'Failed to start voice assistant');
+        }
+    }
+
+    _stopNerdDictation() {
+        try {
+            const scriptPath = GLib.get_home_dir() + '/.config/nerd-dictation/stop-nerd.sh';
+            const scriptFile = Gio.File.new_for_path(scriptPath);
+            
+            if (scriptFile.query_exists(null)) {
+                console.log('Voice Assistant: Stopping nerd-dictation via script');
+                GLib.spawn_command_line_async(`${scriptPath}`);
+                
+                // Update status after a delay
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
+                    this._updateControlStatus();
+                    return GLib.SOURCE_REMOVE;
+                });
+            } else {
+                console.log('Voice Assistant: stop-nerd.sh script not found');
+                this._showNotification('Error', 'Stop script not found at ' + scriptPath);
+            }
+        } catch (e) {
+            console.log(`Voice Assistant: Error stopping nerd-dictation: ${e}`);
+            this._showNotification('Error', 'Failed to stop voice assistant');
+        }
+    }
+
+    _showNotification(title, message) {
+        try {
+            // Try to show a notification if possible
+            GLib.spawn_command_line_async(`notify-send "${title}" "${message}"`);
+        } catch (e) {
+            console.log(`Voice Assistant: Notification error: ${e}`);
+        }
+    }
     
     _updateBufferDisplay() {
         if (!this._bufferLabel) return;
@@ -727,6 +816,11 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         // Clean up timers
         this._clearProcessingTimer();
         this._clearBufferClearTimer();
+        
+        if (this._statusTimer) {
+            GLib.source_remove(this._statusTimer);
+            this._statusTimer = null;
+        }
         
         // Clean up file monitors
         if (this._modeMonitor) {

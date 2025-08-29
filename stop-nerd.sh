@@ -1,27 +1,46 @@
 #!/bin/bash
 
-# Define the paths for the status, mode, and cursor files.
+# Enhanced stop script for nerd-dictation voice assistant
+# Cleanly stops nerd-dictation and clears all temporary files
+
+# Define the paths for the status and mode files
 STATUS_FILE="/tmp/nerd-dictation.status"
 MODE_FILE="/tmp/nerd-dictation.mode"
-CURSOR_FILE="/tmp/nerd-dictation.cursor"
-TYPING_CURSOR_FILE="/tmp/nerd-dictation.typing-cursor"
+BUFFER_FILE="/tmp/nerd-dictation.buffer"
 
-# Check if nerd-dictation is currently running.
+echo "Stopping Voice Assistant..."
+
+# Check if nerd-dictation is currently running
 if [ -f "$STATUS_FILE" ]; then
     echo "Nerd Dictation is running. Ending process and clearing files."
     
-    nerd-dictation end
+    # Gracefully end nerd-dictation
+    nerd-dictation end 2>/dev/null || true
     
-    # Remove all temporary files.
-    rm "$STATUS_FILE"
-    rm "$MODE_FILE"
-    rm "$CURSOR_FILE"
-    rm "$TYPING_CURSOR_FILE"
+    # Kill any remaining nerd-dictation processes (use specific pattern)
+    pkill -f "nerd-dictation begin" 2>/dev/null || true
+    
+    # Wait a moment for cleanup
+    sleep 0.5
+    
 else
-    echo "Nerd Dictation is not running. Clearing files just in case."
+    echo "Nerd Dictation status file not found. Checking for running processes..."
     
-    if [ -f "$STATUS_FILE" ]; then rm "$STATUS_FILE"; fi
-    if [ -f "$MODE_FILE" ]; then rm "$MODE_FILE"; fi
-    if [ -f "$CURSOR_FILE" ]; then rm "$CURSOR_FILE"; fi
-    if [ -f "$TYPING_CURSOR_FILE" ]; then rm "$TYPING_CURSOR_FILE"; fi
+    # Kill any running nerd-dictation processes even without status file (use specific pattern)
+    if pgrep -f "nerd-dictation begin" > /dev/null; then
+        echo "Found running nerd-dictation processes. Terminating..."
+        pkill -f "nerd-dictation begin"
+        sleep 0.5
+    fi
 fi
+
+# Clean up all temporary files
+echo "Cleaning up temporary files..."
+rm -f "$STATUS_FILE"
+rm -f "$MODE_FILE" 
+rm -f "$BUFFER_FILE"
+
+# Also clean up any other potential nerd-dictation temp files
+rm -f /tmp/nerd-dictation.* 2>/dev/null || true
+
+echo "Voice Assistant stopped and cleaned up successfully."

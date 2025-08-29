@@ -34,5 +34,15 @@
       <summary>Activation hotword</summary>
       <description>The word used to activate command mode from normal mode</description>
     </key>
+    <key name="auto-sync" type="b">
+      <default>true</default>
+      <summary>Auto-sync configuration</summary>
+      <description>Automatically sync changes between extension and configuration file</description>
+    </key>
+    <key name="debug-mode" type="b">
+      <default>false</default>
+      <summary>Debug mode</summary>
+      <description>Enable verbose logging for troubleshooting</description>
+    </key>
   </schema>
 </schemalist>
