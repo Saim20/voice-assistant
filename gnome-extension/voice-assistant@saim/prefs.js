@@ -66,13 +66,6 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
         );
 
         this._prefsBuilder.createSwitchRow(
-            'Show Mode Label',
-            'Display text label next to the microphone icon',
-            'show-label',
-            interfaceGroup
-        );
-
-        this._prefsBuilder.createSwitchRow(
             'Enable Notifications',
             'Show notifications for mode changes and command recognition',
             'notification-enabled',

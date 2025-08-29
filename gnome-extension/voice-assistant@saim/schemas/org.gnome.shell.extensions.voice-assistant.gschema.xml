@@ -1,11 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist gettext-domain="voice-assistant">
   <schema id="org.gnome.shell.extensions.voice-assistant" path="/org/gnome/shell/extensions/voice-assistant/">
-    <key name="show-label" type="b">
-      <default>false</default>
-      <summary>Show mode label</summary>
-      <description>Whether to show a text label next to the icon indicating the current mode</description>
-    </key>
     <key name="notification-enabled" type="b">
       <default>true</default>
       <summary>Enable notifications</summary>

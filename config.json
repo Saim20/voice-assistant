@@ -1,7 +1,7 @@
 {
   "hotword": "hey",
   "command_threshold": 80,
-  "processing_interval": 1.5,
+  "processing_interval": 0.5,
   "logging": {
     "level": "INFO",
     "file": "/tmp/voice_assistant.log"

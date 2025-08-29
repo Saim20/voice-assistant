@@ -22,7 +22,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         this.add_child(this._box);
         
         this._icon = new St.Icon({
-            icon_name: 'audio-input-microphone-symbolic',
+            icon_name: 'applications-system-symbolic',
             style_class: 'system-status-icon'
         });
         this._box.add_child(this._icon);
@@ -44,6 +44,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         this._lastCommandTime = 0;
         this._processingTimer = null;
         this._bufferClearTimer = null;
+        this._bufferTimeoutTimer = null;
         
         // Load configuration using ConfigManager
         this._settings = new Gio.Settings({ schema: 'org.gnome.shell.extensions.voice-assistant' });
@@ -225,12 +226,17 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
                 if (success) {
                     let newMode = new TextDecoder().decode(contents).trim();
                     if (newMode && newMode !== this._currentMode) {
-                        console.log(`Voice Assistant: Mode changed from ${this._currentMode} to ${newMode}`);
+                        const oldMode = this._currentMode;
+                        console.log(`Voice Assistant: Mode changed from ${oldMode} to ${newMode}`);
                         this._currentMode = newMode;
+                        
+                        // Show notification for mode change
+                        this._showNotification('Voice Assistant', `Switched to ${newMode.toUpperCase()} mode`);
                         
                         // Clear buffer and timers on mode change
                         this._clearProcessingTimer();
                         this._clearBufferClearTimer();
+                        this._clearBufferTimeoutTimer();
                         
                         // Reset typing mode state
                         if (newMode === 'typing') {
@@ -260,6 +266,17 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
                         
                         console.log(`Voice Assistant: Buffer updated (${this._currentMode} mode): "${newBuffer}"`);
                         
+                        // Clear existing timeout and set new one for no-new-text cleanup
+                        this._clearBufferTimeoutTimer();
+                        if (newBuffer && newBuffer.length > 0) {
+                            this._bufferTimeoutTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+                                console.log('Voice Assistant: Buffer timeout - no new text for 1 second, triggering cleanup');
+                                this._handleBufferTimeout();
+                                this._bufferTimeoutTimer = null;
+                                return GLib.SOURCE_REMOVE;
+                            });
+                        }
+                        
                         // Process the buffer based on current mode
                         this._processBuffer(newBuffer);
                         
@@ -270,6 +287,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
                 // Buffer file doesn't exist, clear buffer
                 if (this._currentBuffer !== '') {
                     this._currentBuffer = '';
+                    this._clearBufferTimeoutTimer();
                     this._updateDisplay();
                 }
             }
@@ -321,7 +339,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     }
     
     _processCommandMode(text) {
-        // Set up automatic processing after interval
+        // Wait for the processing interval before checking commands
         const interval = (this._config.processing_interval || 1.5) * 1000;
         
         this._processingTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, () => {
@@ -375,10 +393,9 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         } else {
             console.log(`Voice Assistant: No matching command found (best: ${bestRatio}%)`);
             
-            // Clear buffer if no match and substantial text
-            if (text.split(/\s+/).length >= 3) {
-                this._scheduleBufferClear(1000);
-            }
+            // Schedule buffer clear after another interval if no commands match
+            const clearInterval = (this._config.processing_interval || 1.5) * 1000;
+            this._scheduleBufferClear(clearInterval);
         }
     }
     
@@ -479,6 +496,9 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         try {
             console.log(`Voice Assistant: Executing command: ${command}`);
             
+            // Show notification for command execution
+            this._showNotification('Command Executed', `Running: ${command}`);
+            
             // Use command executor script if available
             const scriptPath = GLib.get_home_dir() + '/.config/nerd-dictation/command_executor.sh';
             const scriptFile = Gio.File.new_for_path(scriptPath);
@@ -497,6 +517,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             
         } catch (e) {
             console.log(`Voice Assistant: Error executing command "${command}": ${e}`);
+            this._showNotification('Command Error', `Failed to execute: ${command}`);
         }
     }
     
@@ -551,6 +572,18 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         }
     }
     
+    _clearBufferTimeoutTimer() {
+        if (this._bufferTimeoutTimer) {
+            GLib.source_remove(this._bufferTimeoutTimer);
+            this._bufferTimeoutTimer = null;
+        }
+    }
+    
+    _handleBufferTimeout() {
+        console.log('Voice Assistant: Buffer timeout triggered - executing suspend/resume cycle');
+        this._suspendResumeForBufferClear();
+    }
+    
     _scheduleBufferClear(delay) {
         this._clearBufferClearTimer();
         
@@ -577,12 +610,12 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     
     _updateDisplay() {
         // Update icon and style based on mode
-        let iconName = 'audio-input-microphone-symbolic';
+        let iconName = 'radio-symbolic';
         let styleClass = 'system-status-icon';
         
         switch (this._currentMode) {
             case 'command':
-                iconName = 'audio-input-microphone-high-symbolic';
+                iconName = 'applications-system-symbolic';
                 styleClass += ' voice-assistant-command';
                 break;
             case 'typing':
@@ -590,7 +623,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
                 styleClass += ' voice-assistant-typing';
                 break;
             default:
-                iconName = 'audio-input-microphone-symbolic';
+                iconName = 'radio-symbolic';
                 styleClass += ' voice-assistant-normal';
                 break;
         }
@@ -747,8 +780,15 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
 
     _showNotification(title, message) {
         try {
-            // Try to show a notification if possible
-            GLib.spawn_command_line_async(`notify-send "${title}" "${message}"`);
+            // Check if notifications are enabled in settings
+            if (!this._settings.get_boolean('notification-enabled')) {
+                return;
+            }
+            
+            // Use notify-send for system notifications
+            const command = ['notify-send', '--app-name=Voice Assistant', `--icon=audio-input-microphone-symbolic`, title, message];
+            GLib.spawn_async(null, command, null, GLib.SpawnFlags.SEARCH_PATH, null);
+            console.log(`Voice Assistant: Notification sent - ${title}: ${message}`);
         } catch (e) {
             console.log(`Voice Assistant: Notification error: ${e}`);
         }
@@ -814,6 +854,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         // Clean up timers
         this._clearProcessingTimer();
         this._clearBufferClearTimer();
+        this._clearBufferTimeoutTimer();
         
         if (this._statusTimer) {
             GLib.source_remove(this._statusTimer);
