@@ -224,6 +224,15 @@
         "sleep",
         "suspend"
       ]
+    },
+    {
+      "name": "System Update",
+      "command": "kgx -e yay -Syu",
+      "phrases": [
+        "update the system",
+        "system update",
+        "update system"
+      ]
     }
   ],
   "typing_mode": {

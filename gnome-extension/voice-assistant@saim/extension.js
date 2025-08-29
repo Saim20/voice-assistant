@@ -42,9 +42,11 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         this._lastProcessedText = '';
         this._processedTextHashes = new Set();
         this._lastCommandTime = 0;
+        this._lastExecutedText = '';
         this._processingTimer = null;
         this._bufferClearTimer = null;
         this._bufferTimeoutTimer = null;
+        this._debounceTimer = null;
         
         // Load configuration using ConfigManager
         this._settings = new Gio.Settings({ schema: 'org.gnome.shell.extensions.voice-assistant' });
@@ -260,27 +262,32 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
                     let newBuffer = new TextDecoder().decode(contents).trim();
                     
                     if (newBuffer !== this._currentBuffer) {
-                        const now = Date.now();
-                        this._lastBufferUpdate = now;
-                        this._currentBuffer = newBuffer;
+                        console.log(`Voice Assistant: Raw buffer change detected: "${newBuffer}"`);
                         
-                        console.log(`Voice Assistant: Buffer updated (${this._currentMode} mode): "${newBuffer}"`);
-                        
-                        // Clear existing timeout and set new one for no-new-text cleanup
-                        this._clearBufferTimeoutTimer();
-                        if (newBuffer && newBuffer.length > 0) {
-                            this._bufferTimeoutTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
-                                console.log('Voice Assistant: Buffer timeout - no new text for 1 second, triggering cleanup');
-                                this._handleBufferTimeout();
-                                this._bufferTimeoutTimer = null;
-                                return GLib.SOURCE_REMOVE;
-                            });
+                        // Additional check: if buffer was recently cleared and this is the same text,
+                        // it might be from a suspend/resume cycle - ignore it
+                        if (this._lastCommandTime && 
+                            (Date.now() - this._lastCommandTime) < 2000 && 
+                            this._lastExecutedText === newBuffer.toLowerCase()) {
+                            console.log(`Voice Assistant: Ignoring duplicate text from suspend/resume cycle: "${newBuffer}"`);
+                            return;
                         }
                         
-                        // Process the buffer based on current mode
-                        this._processBuffer(newBuffer);
+                        // Clear existing debounce timer
+                        if (this._debounceTimer) {
+                            GLib.source_remove(this._debounceTimer);
+                            this._debounceTimer = null;
+                        }
                         
-                        this._updateDisplay();
+                        // Update buffer immediately
+                        this._currentBuffer = newBuffer;
+                        
+                        // Set up debounced processing (process the current buffer, not the captured value)
+                        this._debounceTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+                            this._processBufferChange();
+                            this._debounceTimer = null;
+                            return GLib.SOURCE_REMOVE;
+                        });
                     }
                 }
             } else {
@@ -296,12 +303,29 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         }
     }
     
+    _processBufferChange() {
+        const now = Date.now();
+        this._lastBufferUpdate = now;
+        
+        console.log(`Voice Assistant: Buffer updated (${this._currentMode} mode): "${this._currentBuffer}"`);
+        
+        // Clear all existing timers when new text arrives
+        this._clearBufferTimeoutTimer();
+        this._clearProcessingTimer();
+        this._clearBufferClearTimer();
+        
+        // Process the buffer based on current mode
+        this._processBuffer(this._currentBuffer);
+        
+        this._updateDisplay();
+    }
+    
     _processBuffer(text) {
         if (!text || text.trim() === '') {
             return;
         }
         
-        // Clear any existing processing timer
+        // Clear any existing processing timer before setting a new one
         this._clearProcessingTimer();
         this._clearBufferClearTimer();
         
@@ -342,13 +366,18 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         // Wait for the processing interval before checking commands
         const interval = (this._config.processing_interval || 1.5) * 1000;
         
-        this._processingTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, () => {
-            this._executeCommandProcessing(text);
-            this._processingTimer = null;
-            return GLib.SOURCE_REMOVE;
-        });
-        
-        console.log(`Voice Assistant: Scheduled command processing in ${interval}ms`);
+        // Only set timer if one isn't already running for this text
+        if (!this._processingTimer) {
+            this._processingTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, () => {
+                this._executeCommandProcessing(text);
+                this._processingTimer = null;
+                return GLib.SOURCE_REMOVE;
+            });
+            
+            console.log(`Voice Assistant: Scheduled command processing in ${interval}ms`);
+        } else {
+            console.log(`Voice Assistant: Processing timer already running, skipping`);
+        }
     }
     
     _executeCommandProcessing(text) {
@@ -383,9 +412,8 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         if (bestMatch && bestRatio >= (this._config.command_threshold || 80)) {
             console.log(`Voice Assistant: Executing command (${bestRatio}%): "${bestMatch}"`);
             
-            // Mark as processed
-            const textHash = this._hashText(text.toLowerCase());
-            this._processedTextHashes.add(textHash);
+            // Track the executed text and timestamp to prevent duplicate execution
+            this._lastExecutedText = text.toLowerCase();
             this._lastCommandTime = Date.now();
             
             // Execute the command
@@ -579,9 +607,11 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         }
     }
     
-    _handleBufferTimeout() {
-        console.log('Voice Assistant: Buffer timeout triggered - executing suspend/resume cycle');
-        this._suspendResumeForBufferClear();
+    _clearDebounceTimer() {
+        if (this._debounceTimer) {
+            GLib.source_remove(this._debounceTimer);
+            this._debounceTimer = null;
+        }
     }
     
     _scheduleBufferClear(delay) {
@@ -597,6 +627,11 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     
     _clearBuffer() {
         try {
+            // Clear any pending processing timers when buffer is cleared
+            this._clearProcessingTimer();
+            this._clearBufferClearTimer();
+            this._clearDebounceTimer();
+            
             const bufferFile = Gio.File.new_for_path('/tmp/nerd-dictation.buffer');
             if (bufferFile.query_exists(null)) {
                 bufferFile.replace_contents('', null, false, Gio.FileCreateFlags.NONE, null);
@@ -855,6 +890,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         this._clearProcessingTimer();
         this._clearBufferClearTimer();
         this._clearBufferTimeoutTimer();
+        this._clearDebounceTimer();
         
         if (this._statusTimer) {
             GLib.source_remove(this._statusTimer);
