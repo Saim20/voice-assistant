@@ -6,6 +6,7 @@
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
 import GObject from 'gi://GObject';
+import {KeyCommandBuilder} from './KeyCommandBuilder.js';
 
 export const CommandListRow = GObject.registerClass({
     GTypeName: 'CommandListRow',
@@ -60,7 +61,7 @@ export const CommandListRow = GObject.registerClass({
             modal: true,
             transient_for: this.get_root(),
             default_width: 500,
-            default_height: 400,
+            default_height: 600,
         });
 
         dialog.add_button('Cancel', Gtk.ResponseType.CANCEL);
@@ -91,20 +92,79 @@ export const CommandListRow = GObject.registerClass({
         nameRow.add_suffix(nameEntry);
         commandGroup.add(nameRow);
 
-        // Command entry
-        const commandRow = new Adw.ActionRow({
-            title: 'Shell Command',
-            subtitle: 'The actual command to execute',
+        // Command type selection
+        const typeRow = new Adw.ActionRow({
+            title: 'Command Type',
+            subtitle: 'Choose how to build your command',
         });
-        const commandEntry = new Gtk.Entry({
-            text: this._commandData.command || '',
-            placeholder_text: 'e.g., kgx or ydotool key 29:1 46:1 46:0 29:0',
-            valign: Gtk.Align.CENTER,
-        });
-        commandRow.add_suffix(commandEntry);
-        commandGroup.add(commandRow);
+        
+        const typeCombo = new Gtk.ComboBoxText();
+        typeCombo.append('shell', 'Shell Command');
+        typeCombo.append('keys', 'Key Combination');
+        
+        // Detect current command type
+        const currentCommand = this._commandData.command || '';
+        const isKeyCommand = currentCommand.startsWith('ydotool key ');
+        typeCombo.set_active_id(isKeyCommand ? 'keys' : 'shell');
+        
+        typeRow.add_suffix(typeCombo);
+        commandGroup.add(typeRow);
 
         content.append(commandGroup);
+
+        // Command input group (will be switched based on type)
+        const commandInputGroup = new Adw.PreferencesGroup({
+            title: 'Command Configuration',
+        });
+
+        // Shell command entry (initially hidden if key command)
+        const shellCommandRow = new Adw.ActionRow({
+            title: 'Shell Command',
+            subtitle: 'The actual command to execute',
+            visible: !isKeyCommand,
+        });
+        const commandEntry = new Gtk.Entry({
+            text: isKeyCommand ? '' : currentCommand,
+            placeholder_text: 'e.g., kgx, firefox, nautilus',
+            valign: Gtk.Align.CENTER,
+        });
+        shellCommandRow.add_suffix(commandEntry);
+        commandInputGroup.add(shellCommandRow);
+
+        // Key command builder (initially hidden if shell command)
+        const keyBuilderRow = new Adw.ActionRow({
+            title: 'Key Combination',
+            subtitle: 'Build keyboard shortcuts visually',
+            visible: isKeyCommand,
+        });
+        
+        const keyBuilder = new KeyCommandBuilder();
+        if (isKeyCommand) {
+            keyBuilder.setCommand(currentCommand);
+        }
+        
+        // Container for the key builder
+        const keyBuilderBox = new Gtk.ScrolledWindow({
+            height_request: 300,
+            visible: isKeyCommand,
+            has_frame: true,
+        });
+        keyBuilderBox.set_child(keyBuilder);
+        
+        commandInputGroup.add(keyBuilderRow);
+        commandInputGroup.add(keyBuilderBox);
+
+        content.append(commandInputGroup);
+
+        // Type combo change handler
+        typeCombo.connect('changed', () => {
+            const selectedType = typeCombo.get_active_id();
+            const showKeys = selectedType === 'keys';
+            
+            shellCommandRow.set_visible(!showKeys);
+            keyBuilderRow.set_visible(showKeys);
+            keyBuilderBox.set_visible(showKeys);
+        });
 
         // Phrases group
         const phrasesGroup = new Adw.PreferencesGroup({
@@ -152,9 +212,14 @@ export const CommandListRow = GObject.registerClass({
         dialog.connect('response', (dialog, response) => {
             if (response === Gtk.ResponseType.OK) {
                 // Collect data
+                const selectedType = typeCombo.get_active_id();
+                const finalCommand = selectedType === 'keys' ? 
+                    keyBuilder.getCommand() : 
+                    commandEntry.get_text().trim();
+
                 const newData = {
                     name: nameEntry.get_text().trim(),
-                    command: commandEntry.get_text().trim(),
+                    command: finalCommand,
                     phrases: phraseEntries
                         .map(entry => entry.get_text().trim())
                         .filter(phrase => phrase.length > 0)
@@ -324,6 +389,7 @@ export class CommandManager {
             modal: true,
             transient_for: listBox.get_root(),
             default_width: 500,
+            default_height: 600,
         });
 
         dialog.add_button('Cancel', Gtk.ResponseType.CANCEL);
@@ -351,16 +417,58 @@ export class CommandManager {
         nameRow.add_suffix(nameEntry);
         group.add(nameRow);
 
-        const commandRow = new Adw.ActionRow({
+        // Command type selection
+        const typeRow = new Adw.ActionRow({
+            title: 'Command Type',
+            subtitle: 'Choose how to build your command',
+        });
+        
+        const typeCombo = new Gtk.ComboBoxText();
+        typeCombo.append('shell', 'Shell Command');
+        typeCombo.append('keys', 'Key Combination');
+        typeCombo.set_active_id('shell'); // Default to shell
+        
+        typeRow.add_suffix(typeCombo);
+        group.add(typeRow);
+
+        // Shell command row
+        const shellCommandRow = new Adw.ActionRow({
             title: 'Shell Command',
             subtitle: 'The actual command to execute',
+            visible: true,
         });
         const commandEntry = new Gtk.Entry({
-            placeholder_text: 'e.g., kgx',
+            placeholder_text: 'e.g., kgx, firefox, nautilus',
             valign: Gtk.Align.CENTER,
         });
-        commandRow.add_suffix(commandEntry);
-        group.add(commandRow);
+        shellCommandRow.add_suffix(commandEntry);
+        group.add(shellCommandRow);
+
+        // Key builder (initially hidden)
+        const keyBuilderRow = new Adw.ActionRow({
+            title: 'Key Combination',
+            subtitle: 'Build keyboard shortcuts visually',
+            visible: false,
+        });
+        group.add(keyBuilderRow);
+        
+        const keyBuilder = new KeyCommandBuilder();
+        const keyBuilderBox = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            visible: false,
+        });
+        keyBuilderBox.append(keyBuilder);
+        group.add(keyBuilderBox);
+
+        // Type change handler
+        typeCombo.connect('changed', () => {
+            const selectedType = typeCombo.get_active_id();
+            const showKeys = selectedType === 'keys';
+            
+            shellCommandRow.set_visible(!showKeys);
+            keyBuilderRow.set_visible(showKeys);
+            keyBuilderBox.set_visible(showKeys);
+        });
 
         const phraseRow = new Adw.ActionRow({
             title: 'First Phrase',
@@ -378,8 +486,12 @@ export class CommandManager {
         dialog.connect('response', (dialog, response) => {
             if (response === Gtk.ResponseType.OK) {
                 const name = nameEntry.get_text().trim();
-                const command = commandEntry.get_text().trim();
                 const phrase = phraseEntry.get_text().trim();
+                const selectedType = typeCombo.get_active_id();
+                
+                const command = selectedType === 'keys' ? 
+                    keyBuilder.getCommand() : 
+                    commandEntry.get_text().trim();
 
                 if (name && command && phrase) {
                     const newCommand = {
@@ -395,6 +507,17 @@ export class CommandManager {
                     config.commands.push(newCommand);
                     this._configManager.saveConfig(config);
                     this._loadCommands(listBox);
+                } else {
+                    // Show error toast
+                    const toast = new Adw.Toast({
+                        title: 'Please fill in all required fields',
+                        timeout: 3,
+                    });
+                    
+                    const root = dialog.get_root();
+                    if (root && root.add_toast) {
+                        root.add_toast(toast);
+                    }
                 }
             }
             dialog.destroy();

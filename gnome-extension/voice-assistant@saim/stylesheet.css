@@ -128,3 +128,75 @@
     border-color: rgba(78, 205, 196, 0.3);
     box-shadow: 0 2px 8px rgba(78, 205, 196, 0.2);
 }
+
+/* Key Command Builder Styles */
+.keyboard-key {
+    background: linear-gradient(145deg, #f0f0f0, #e0e0e0);
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin: 2px;
+    font-family: monospace;
+    font-weight: bold;
+    font-size: 0.9em;
+    color: #333;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.8);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 
+                inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    min-width: 32px;
+    text-align: center;
+}
+
+@media (prefers-color-scheme: dark) {
+    .keyboard-key {
+        background: linear-gradient(145deg, #404040, #505050);
+        border-color: #606060;
+        color: #f0f0f0;
+        text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3), 
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+}
+
+/* Enhanced button styles for key builder */
+.key-builder-button {
+    min-height: 36px;
+    min-width: 40px;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+}
+
+.key-builder-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.key-builder-button:active {
+    transform: translateY(0);
+}
+
+.key-builder-button.accent {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.key-builder-button.accent:checked {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+/* Preview frame styling */
+.key-preview-frame {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 12px;
+    padding: 16px;
+    min-height: 60px;
+    border: 2px dashed rgba(0, 0, 0, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+    .key-preview-frame {
+        background: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+}

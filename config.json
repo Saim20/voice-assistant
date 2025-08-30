@@ -104,26 +104,10 @@
     },
     {
       "name": "Close Window",
-      "command": "ydotool key 29:1 16:1 16:0 29:0",
+      "command": "ydotool key 125:1 16:1 16:0 125:0",
       "phrases": [
         "close window",
         "close tab"
-      ]
-    },
-    {
-      "name": "Minimize",
-      "command": "ydotool key 125:1 36:1 36:0 125:0",
-      "phrases": [
-        "minimize window",
-        "minimize"
-      ]
-    },
-    {
-      "name": "Maximize",
-      "command": "ydotool key 125:1 17:1 17:0 125:0",
-      "phrases": [
-        "maximize window",
-        "maximize"
       ]
     },
     {
@@ -232,6 +216,14 @@
         "update the system",
         "system update",
         "update system"
+      ]
+    },
+    {
+      "name": "Facebook",
+      "command": "firefox https://facebook.com/",
+      "phrases": [
+        "open facebook",
+        "facebook"
       ]
     }
   ],
