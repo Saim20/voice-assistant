@@ -149,6 +149,17 @@ private:
     // Command debouncing
     std::chrono::steady_clock::time_point m_lastCommandTime;
     std::mutex m_commandTimeMutex;
+    
+    // Transcription deduplication
+    struct TranscriptionRecord {
+        std::string text;
+        std::chrono::steady_clock::time_point timestamp;
+    };
+    std::vector<TranscriptionRecord> m_recentTranscriptions;
+    std::mutex m_transcriptionMutex;
+    bool isDuplicateTranscription(const std::string& text);
+    void addTranscriptionRecord(const std::string& text);
+    void cleanOldTranscriptions();
 };
 
 } // namespace VoiceAssistant

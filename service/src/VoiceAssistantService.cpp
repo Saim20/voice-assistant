@@ -565,6 +565,15 @@ void VoiceAssistantService::audioProcessingLoop() {
 // Command processing
 
 void VoiceAssistantService::processTranscription(const std::string& text) {
+    // Check for duplicate transcriptions first
+    if (isDuplicateTranscription(text)) {
+        log("INFO", "Duplicate transcription ignored: " + text);
+        return;
+    }
+    
+    // Record this transcription
+    addTranscriptionRecord(text);
+    
     updateBuffer(text);
     
     Mode currentMode = m_currentMode.load();
@@ -894,6 +903,66 @@ void VoiceAssistantService::updateBuffer(const std::string& text) {
     std::lock_guard<std::mutex> lock(m_bufferMutex);
     m_currentBuffer = text;
     emitBufferChanged(text);
+}
+
+bool VoiceAssistantService::isDuplicateTranscription(const std::string& text) {
+    std::lock_guard<std::mutex> lock(m_transcriptionMutex);
+    
+    // Clean old transcriptions first (remove entries older than 3 seconds)
+    auto now = std::chrono::steady_clock::now();
+    m_recentTranscriptions.erase(
+        std::remove_if(m_recentTranscriptions.begin(), m_recentTranscriptions.end(),
+            [&now](const TranscriptionRecord& record) {
+                auto age = std::chrono::duration_cast<std::chrono::seconds>(
+                    now - record.timestamp).count();
+                return age > 3;
+            }),
+        m_recentTranscriptions.end()
+    );
+    
+    // Check if this transcription is a duplicate
+    // Consider it duplicate if same text appeared in the last 2 seconds
+    for (const auto& record : m_recentTranscriptions) {
+        if (record.text == text) {
+            auto timeSince = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - record.timestamp).count();
+            if (timeSince < 2000) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+void VoiceAssistantService::addTranscriptionRecord(const std::string& text) {
+    std::lock_guard<std::mutex> lock(m_transcriptionMutex);
+    
+    TranscriptionRecord record;
+    record.text = text;
+    record.timestamp = std::chrono::steady_clock::now();
+    
+    m_recentTranscriptions.push_back(record);
+    
+    // Keep only last 10 transcriptions to prevent memory growth
+    if (m_recentTranscriptions.size() > 10) {
+        m_recentTranscriptions.erase(m_recentTranscriptions.begin());
+    }
+}
+
+void VoiceAssistantService::cleanOldTranscriptions() {
+    std::lock_guard<std::mutex> lock(m_transcriptionMutex);
+    
+    auto now = std::chrono::steady_clock::now();
+    m_recentTranscriptions.erase(
+        std::remove_if(m_recentTranscriptions.begin(), m_recentTranscriptions.end(),
+            [&now](const TranscriptionRecord& record) {
+                auto age = std::chrono::duration_cast<std::chrono::seconds>(
+                    now - record.timestamp).count();
+                return age > 3;
+            }),
+        m_recentTranscriptions.end()
+    );
 }
 
 } // namespace VoiceAssistant
