@@ -14,6 +14,8 @@ import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/ex
 import {ConfigManager} from './lib/ConfigManager.js';
 import {CommandManager} from './lib/CommandEditor.js';
 import {PreferencesBuilder, StatusManager} from './lib/PreferencesWidgets.js';
+import {WhisperModelManager} from './lib/WhisperModelManager.js';
+import {LogViewer} from './lib/LogViewer.js';
 
 export default class VoiceAssistantExtensionPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
@@ -24,10 +26,14 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
         this._commandManager = new CommandManager(this._configManager);
         this._prefsBuilder = new PreferencesBuilder(settings);
         this._statusManager = new StatusManager();
+        this._modelManager = new WhisperModelManager();
+        this._logViewer = new LogViewer();
         
         // Create pages
         this._createGeneralPage(window, settings);
+        this._createModelsPage(window, settings);
         this._createCommandsPage(window, settings);
+        this._createLogsPage(window, settings);
         this._createAboutPage(window, settings);
     }
 
@@ -143,6 +149,107 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
         }
 
         page.add(statusGroup);
+        window.add(page);
+    }
+
+    _createLogsPage(window, settings) {
+        const page = new Adw.PreferencesPage({
+            title: 'Logs',
+            icon_name: 'text-x-generic-symbolic',
+        });
+
+        // Add log viewer group from LogViewer
+        const logGroup = this._logViewer.createLogViewerGroup(window);
+        page.add(logGroup);
+
+        // Log configuration group
+        const configGroup = this._prefsBuilder.createGroup(
+            'Log Configuration',
+            'Logging settings and information'
+        );
+
+        this._prefsBuilder.createInfoRow(
+            'Log Location',
+            'Service logs are written to /tmp/voice_assistant.log',
+            configGroup
+        );
+
+        this._prefsBuilder.createInfoRow(
+            'Systemd Journal',
+            'Complete service logs (including stdout/stderr) are available via systemd journal',
+            configGroup
+        );
+
+        this._prefsBuilder.createInfoRow(
+            'Log Rotation',
+            'Log files in /tmp are automatically cleared on system reboot',
+            configGroup
+        );
+
+        page.add(configGroup);
+
+        window.add(page);
+    }
+
+    _createAboutPage(window, settings) {
+        const page = new Adw.PreferencesPage({
+            title: 'Models',
+            icon_name: 'folder-download-symbolic',
+        });
+
+        // Add model management group from WhisperModelManager
+        const modelGroup = this._modelManager.createModelGroup(window);
+        page.add(modelGroup);
+
+        // Model information group
+        const infoGroup = this._prefsBuilder.createGroup(
+            'Model Information',
+            'Understanding whisper.cpp models for speech recognition'
+        );
+
+        this._prefsBuilder.createInfoRow(
+            'Model Selection',
+            'The C++ service automatically uses models from the model directory. Restart the service after downloading new models.',
+            infoGroup
+        );
+
+        this._prefsBuilder.createInfoRow(
+            'Recommended Models',
+            'tiny.en: Best balance of speed and accuracy for English • base.en: Better accuracy, slower • small.en: High accuracy, requires more resources',
+            infoGroup
+        );
+
+        this._prefsBuilder.createInfoRow(
+            'Model Source',
+            'Models are downloaded from Hugging Face (ggerganov/whisper.cpp repository)',
+            infoGroup
+        );
+
+        page.add(infoGroup);
+
+        // Service restart info
+        const restartGroup = this._prefsBuilder.createGroup(
+            'Apply Changes',
+            'Service must be restarted to use a different model'
+        );
+
+        this._prefsBuilder.createButtonRow(
+            'Restart Service',
+            'Restart the voice assistant service to apply model changes',
+            'Restart Now',
+            'view-refresh-symbolic',
+            () => {
+                try {
+                    GLib.spawn_command_line_async('systemctl --user restart voice-assistant.service');
+                    this._showToast(window, 'Restarting voice assistant service...');
+                } catch (e) {
+                    this._showToast(window, 'Failed to restart service');
+                }
+            },
+            restartGroup
+        );
+
+        page.add(restartGroup);
         window.add(page);
     }
 
@@ -277,12 +384,9 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
             serviceGroup
         );
 
-        this._prefsBuilder.createButtonRow(
-            'View Service Logs',
-            'Open service logs with journalctl',
-            'View Logs',
-            'text-x-generic-symbolic',
-            () => this._openLogFile(),
+        this._prefsBuilder.createInfoRow(
+            'Service Control',
+            'Use systemctl --user {start|stop|restart|status} voice-assistant.service',
             serviceGroup
         );
 
@@ -336,20 +440,6 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
         });
 
         dialog.present();
-    }
-
-    _openLogFile() {
-        try {
-            // Open terminal with journalctl command
-            GLib.spawn_command_line_async('gnome-terminal -- journalctl --user -u voice-assistant.service -f');
-        } catch (e) {
-            try {
-                // Fallback for KDE or other DEs
-                GLib.spawn_command_line_async('konsole -e journalctl --user -u voice-assistant.service -f');
-            } catch (e2) {
-                console.log('Could not open logs - try: journalctl --user -u voice-assistant.service -f');
-            }
-        }
     }
 
     _openConfigDirectory() {

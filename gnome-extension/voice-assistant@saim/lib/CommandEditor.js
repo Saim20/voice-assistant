@@ -185,11 +185,9 @@ export const CommandListRow = GObject.registerClass({
 
         // Add existing phrases
         const phrases = this._commandData.phrases || [];
-        const phraseEntries = [];
 
         phrases.forEach(phrase => {
-            const entry = this._createPhraseEntry(phrase, phrasesListBox);
-            phraseEntries.push(entry);
+            this._createPhraseEntry(phrase, phrasesListBox);
         });
 
         // Add new phrase button
@@ -201,7 +199,6 @@ export const CommandListRow = GObject.registerClass({
 
         addPhraseButton.connect('clicked', () => {
             const entry = this._createPhraseEntry('', phrasesListBox);
-            phraseEntries.push(entry);
             entry.grab_focus();
         });
 
@@ -217,12 +214,24 @@ export const CommandListRow = GObject.registerClass({
                     keyBuilder.getCommand() : 
                     commandEntry.get_text().trim();
 
+                // Collect phrases from the ListBox (only rows that still exist)
+                const collectedPhrases = [];
+                let child = phrasesListBox.get_first_child();
+                while (child) {
+                    // We stored the entry reference on the row itself
+                    if (child._phraseEntry) {
+                        const phraseText = child._phraseEntry.get_text().trim();
+                        if (phraseText.length > 0) {
+                            collectedPhrases.push(phraseText);
+                        }
+                    }
+                    child = child.get_next_sibling();
+                }
+
                 const newData = {
                     name: nameEntry.get_text().trim(),
                     command: finalCommand,
-                    phrases: phraseEntries
-                        .map(entry => entry.get_text().trim())
-                        .filter(phrase => phrase.length > 0)
+                    phrases: collectedPhrases
                 };
 
                 // Validate using the parent CommandManager's method
@@ -264,6 +273,9 @@ export const CommandListRow = GObject.registerClass({
             placeholder_text: 'e.g., open terminal',
             hexpand: true,
         });
+
+        // Store entry reference on the row for easy access later
+        row._phraseEntry = entry;
 
         const deleteButton = new Gtk.Button({
             icon_name: 'user-trash-symbolic',
