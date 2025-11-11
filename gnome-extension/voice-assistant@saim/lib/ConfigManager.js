@@ -1,6 +1,7 @@
 /**
  * ConfigManager.js - Configuration management utilities
- * Handles loading, saving, and synchronizing configuration between extension and files
+ * Handles loading, saving, and synchronizing configuration with the D-Bus service
+ * Config file syncs between GNOME extension preferences and voice assistant service
  */
 
 import Gio from 'gi://Gio';
@@ -23,6 +24,8 @@ export class ConfigManager {
                 let [success, contents] = this._configFile.load_contents(null);
                 if (success) {
                     this._config = JSON.parse(new TextDecoder().decode(contents));
+                    // Filter out comment fields (they start with _)
+                    this._config = this._filterComments(this._config);
                     return this._config;
                 }
             }
@@ -44,9 +47,25 @@ export class ConfigManager {
                 parentDir.make_directory_with_parents(null);
             }
 
-            const configJson = JSON.stringify(config, null, 2);
+            // Read existing config to preserve comments
+            let existingConfig = {};
+            if (this._configFile.query_exists(null)) {
+                try {
+                    let [success, contents] = this._configFile.load_contents(null);
+                    if (success) {
+                        existingConfig = JSON.parse(new TextDecoder().decode(contents));
+                    }
+                } catch (e) {
+                    console.log(`ConfigManager: Could not load existing config for comment preservation: ${e}`);
+                }
+            }
+
+            // Merge: preserve comment fields from existing, update actual values from new config
+            const mergedConfig = this._mergePreservingComments(existingConfig, config);
+
+            const configJson = JSON.stringify(mergedConfig, null, 2);
             this._configFile.replace_contents(configJson, null, false, Gio.FileCreateFlags.NONE, null);
-            this._config = config;
+            this._config = config; // Store the clean version internally
             return true;
         } catch (e) {
             console.log(`ConfigManager: Error saving config: ${e}`);
@@ -99,6 +118,59 @@ export class ConfigManager {
     }
 
     /**
+     * Filter out comment fields from config (fields starting with _)
+     */
+    _filterComments(obj) {
+        if (Array.isArray(obj)) {
+            return obj.map(item => this._filterComments(item));
+        } else if (obj !== null && typeof obj === 'object') {
+            const filtered = {};
+            for (const [key, value] of Object.entries(obj)) {
+                // Skip fields starting with underscore (comments)
+                if (!key.startsWith('_')) {
+                    filtered[key] = this._filterComments(value);
+                }
+            }
+            return filtered;
+        }
+        return obj;
+    }
+
+    /**
+     * Merge new config with existing, preserving comment fields
+     */
+    _mergePreservingComments(existing, updated) {
+        if (Array.isArray(updated)) {
+            // For arrays (like commands), just return the updated array
+            return updated;
+        } else if (updated !== null && typeof updated === 'object') {
+            const merged = {};
+            
+            // First, copy all comment fields from existing
+            for (const [key, value] of Object.entries(existing)) {
+                if (key.startsWith('_')) {
+                    merged[key] = value;
+                }
+            }
+            
+            // Then, copy all non-comment fields from updated
+            for (const [key, value] of Object.entries(updated)) {
+                if (!key.startsWith('_')) {
+                    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                        // Recursively merge objects
+                        merged[key] = this._mergePreservingComments(existing[key] || {}, value);
+                    } else {
+                        merged[key] = value;
+                    }
+                }
+            }
+            
+            return merged;
+        }
+        return updated;
+    }
+
+    /**
      * Get default configuration structure
      */
     _getDefaultConfig() {
@@ -110,47 +182,15 @@ export class ConfigManager {
                 "level": "INFO",
                 "file": "/tmp/voice_assistant.log"
             },
-            "commands": {
-                "applications": {
-                    "terminal": ["open terminal", "start terminal", "launch terminal"],
-                    "firefox": ["open firefox", "launch firefox", "start web browser"],
-                    "files": ["open files", "launch files", "start file manager"],
-                    "spotify": ["open spotify", "launch spotify", "start music"],
-                    "code": ["open code", "launch code", "start vscode"],
-                    "calculator": ["open calculator", "launch calculator"]
-                },
-                "window_management": {
-                    "show_overview": ["show overview", "show windows"],
-                    "move_left": ["move left", "go left", "left desktop"],
-                    "move_right": ["move right", "go right", "right desktop"],
-                    "switch_window": ["switch window", "next window"],
-                    "new_tab": ["new tab", "next tab"],
-                    "close_window": ["close window", "close tab"],
-                    "minimize": ["minimize window", "minimize"],
-                    "maximize": ["maximize window", "maximize"]
-                },
-                "text_editing": {
-                    "copy": ["copy", "copy text"],
-                    "paste": ["paste", "paste text"],
-                    "cut": ["cut", "cut text"],
-                    "undo": ["undo", "undo last"],
-                    "redo": ["redo", "redo last"],
-                    "select_all": ["select all", "select everything"]
-                },
-                "system": {
-                    "volume_up": ["volume up", "turn up the volume", "increase volume"],
-                    "volume_down": ["volume down", "turn down the volume", "decrease volume"],
-                    "mute": ["mute", "mute audio", "silence"],
-                    "lock_screen": ["lock screen", "lock my screen"],
-                    "screenshot": ["screenshot", "take screenshot"],
-                    "sleep": ["sleep", "suspend"]
-                },
-                "modes": {
-                    "typing_mode": ["go to typing mode", "typing mode", "start typing"],
-                    "normal_mode": ["go to normal mode", "normal mode", "stop typing", "exit typing"],
-                    "command_mode": ["go to command mode", "command mode"],
-                    "cancel": ["cancel", "stop", "nevermind"]
-                }
+            "commands": [],
+            "typing_mode": {
+                "exit_phrases": [
+                    "stop typing",
+                    "exit typing",
+                    "normal mode",
+                    "go to normal mode"
+                ],
+                "check_recent_chars": 100
             }
         };
     }

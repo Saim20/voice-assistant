@@ -24,6 +24,7 @@ VoiceAssistantService::VoiceAssistantService(sdbus::IConnection& connection, std
     , m_hotword("hey")
     , m_commandThreshold(0.8)
     , m_processingInterval(1.5)
+    , m_typingExitPhrases({"stop typing", "exit typing", "normal mode", "go to normal mode"})
     , m_stopAudioThread(false)
     , m_pulseAudio(nullptr)
     , m_lastCommandTime(std::chrono::steady_clock::now())
@@ -615,8 +616,27 @@ void VoiceAssistantService::processTranscription(const std::string& text) {
             log("INFO", "No command matched");
         }
     } else if (currentMode == Mode::Typing) {
-        // In typing mode, emit buffer changes for text input
-        emitBufferChanged(text);
+        // In typing mode, check for exit phrases first
+        log("INFO", "Typing mode: checking for exit phrases in text: '" + text + "'");
+        bool shouldExit = false;
+        for (const auto& exitPhrase : m_typingExitPhrases) {
+            log("INFO", "Checking exit phrase: '" + exitPhrase + "'");
+            if (text.find(exitPhrase) != std::string::npos) {
+                log("INFO", "Typing exit phrase detected: " + exitPhrase);
+                shouldExit = true;
+                break;
+            }
+        }
+        
+        if (shouldExit) {
+            setModeInternal(Mode::Normal);
+            emitModeChanged("normal", "typing");
+            emitNotification("Mode Changed", "Normal Mode", "normal");
+            clearBuffer();
+        } else {
+            // Normal typing mode - emit buffer changes for text input
+            emitBufferChanged(text);
+        }
     }
 }
 
@@ -779,11 +799,38 @@ void VoiceAssistantService::jsonToConfig(const Json::Value& json) {
         m_processingInterval = json["processing_interval"].asDouble();
     }
     
+    // Load typing mode exit phrases
+    if (json.isMember("typing_mode") && json["typing_mode"].isMember("exit_phrases")) {
+        m_typingExitPhrases.clear();
+        const auto& exitPhrases = json["typing_mode"]["exit_phrases"];
+        if (exitPhrases.isArray()) {
+            for (const auto& phrase : exitPhrases) {
+                std::string exitPhrase = phrase.asString();
+                // Convert to lowercase for matching
+                std::transform(exitPhrase.begin(), exitPhrase.end(), exitPhrase.begin(), ::tolower);
+                m_typingExitPhrases.push_back(exitPhrase);
+            }
+            log("INFO", "Loaded " + std::to_string(m_typingExitPhrases.size()) + " typing exit phrases");
+        }
+    }
+    
     if (json.isMember("commands") && json["commands"].isArray()) {
         std::lock_guard<std::mutex> lock(m_commandsMutex);
         m_commands.clear();
         
         for (const auto& cmdJson : json["commands"]) {
+            // Skip if this is a comment-only object (all keys start with _)
+            bool isCommentOnly = true;
+            for (const auto& key : cmdJson.getMemberNames()) {
+                if (!key.empty() && key[0] != '_') {
+                    isCommentOnly = false;
+                    break;
+                }
+            }
+            if (isCommentOnly) {
+                continue;
+            }
+            
             Command cmd;
             cmd.name = cmdJson["name"].asString();
             cmd.command = cmdJson["command"].asString();
@@ -795,7 +842,10 @@ void VoiceAssistantService::jsonToConfig(const Json::Value& json) {
             }
             
             m_commands.push_back(cmd);
+            log("INFO", "Loaded command: " + cmd.name + " with " + std::to_string(cmd.phrases.size()) + " phrases");
         }
+        
+        log("INFO", "Total commands loaded: " + std::to_string(m_commands.size()));
     }
 }
 

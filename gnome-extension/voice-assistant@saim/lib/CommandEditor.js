@@ -225,23 +225,32 @@ export const CommandListRow = GObject.registerClass({
                         .filter(phrase => phrase.length > 0)
                 };
 
+                // Validate using the parent CommandManager's method
+                // Access through the update callback context
                 if (newData.name && newData.command && newData.phrases.length > 0) {
                     this._commandData = newData;
                     this._updateDisplay();
                     this._onUpdate(newData);
+                    dialog.destroy();
                 } else {
                     // Show error - all fields required
-                    const toast = new Adw.Toast({
-                        title: 'Please fill in all fields and add at least one phrase',
-                        timeout: 3,
-                    });
+                    const errorMsg = !newData.name ? 'Command name is required' :
+                                    !newData.command ? 'Command action is required' :
+                                    'At least one phrase is required';
                     
-                    if (this.get_root().add_toast) {
-                        this.get_root().add_toast(toast);
-                    }
+                    const messageDialog = new Gtk.MessageDialog({
+                        transient_for: dialog,
+                        modal: true,
+                        buttons: Gtk.ButtonsType.OK,
+                        text: 'Validation Error',
+                        secondary_text: errorMsg,
+                    });
+                    messageDialog.connect('response', () => messageDialog.destroy());
+                    messageDialog.present();
                 }
+            } else {
+                dialog.destroy();
             }
-            dialog.destroy();
         });
 
         dialog.present();
@@ -370,7 +379,9 @@ export class CommandManager {
     _updateCommand(index, newData) {
         const config = this._configManager.getConfig();
         if (config.commands && config.commands[index]) {
-            config.commands[index] = newData;
+            // Clean the data (remove any fields starting with _)
+            const cleanData = this._cleanCommandData(newData);
+            config.commands[index] = cleanData;
             this._configManager.saveConfig(config);
         }
     }
@@ -381,6 +392,40 @@ export class CommandManager {
             config.commands.splice(index, 1);
             this._configManager.saveConfig(config);
         }
+    }
+
+    _cleanCommandData(data) {
+        // Remove fields starting with underscore (comments, info, etc.)
+        const cleaned = {};
+        for (const [key, value] of Object.entries(data)) {
+            if (!key.startsWith('_')) {
+                cleaned[key] = value;
+            }
+        }
+        return cleaned;
+    }
+
+    _validateCommand(commandData) {
+        // Validate that command has required fields
+        if (!commandData.name || commandData.name.trim() === '') {
+            return { valid: false, error: 'Command name is required' };
+        }
+        
+        if (!commandData.command || commandData.command.trim() === '') {
+            return { valid: false, error: 'Command action is required' };
+        }
+        
+        if (!commandData.phrases || !Array.isArray(commandData.phrases) || commandData.phrases.length === 0) {
+            return { valid: false, error: 'At least one phrase is required' };
+        }
+        
+        // Check for empty phrases
+        const emptyPhrases = commandData.phrases.filter(p => !p || p.trim() === '');
+        if (emptyPhrases.length > 0) {
+            return { valid: false, error: 'All phrases must have text' };
+        }
+        
+        return { valid: true };
     }
 
     _showNewCommandDialog(listBox) {
@@ -500,6 +545,21 @@ export class CommandManager {
                         phrases: [phrase]
                     };
 
+                    // Validate the command
+                    const validation = this._validateCommand(newCommand);
+                    if (!validation.valid) {
+                        const errorDialog = new Gtk.MessageDialog({
+                            transient_for: dialog,
+                            modal: true,
+                            buttons: Gtk.ButtonsType.OK,
+                            text: 'Validation Error',
+                            secondary_text: validation.error,
+                        });
+                        errorDialog.connect('response', () => errorDialog.destroy());
+                        errorDialog.present();
+                        return;
+                    }
+
                     const config = this._configManager.getConfig();
                     if (!config.commands) {
                         config.commands = [];
@@ -507,20 +567,26 @@ export class CommandManager {
                     config.commands.push(newCommand);
                     this._configManager.saveConfig(config);
                     this._loadCommands(listBox);
+                    dialog.destroy();
                 } else {
-                    // Show error toast
-                    const toast = new Adw.Toast({
-                        title: 'Please fill in all required fields',
-                        timeout: 3,
-                    });
+                    // Show specific error
+                    const errorMsg = !name ? 'Command name is required' :
+                                    !command ? 'Command action is required' :
+                                    'At least one phrase is required';
                     
-                    const root = dialog.get_root();
-                    if (root && root.add_toast) {
-                        root.add_toast(toast);
-                    }
+                    const errorDialog = new Gtk.MessageDialog({
+                        transient_for: dialog,
+                        modal: true,
+                        buttons: Gtk.ButtonsType.OK,
+                        text: 'Validation Error',
+                        secondary_text: errorMsg,
+                    });
+                    errorDialog.connect('response', () => errorDialog.destroy());
+                    errorDialog.present();
                 }
+            } else {
+                dialog.destroy();
             }
-            dialog.destroy();
         });
 
         dialog.present();

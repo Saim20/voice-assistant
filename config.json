@@ -1,13 +1,24 @@
 {
+  "_comment_hotword": "Activation word to trigger command mode from normal mode",
   "hotword": "hey",
+  
+  "_comment_threshold": "Minimum confidence percentage (50-100) required to execute a command",
   "command_threshold": 80,
-  "processing_interval": 0.5,
+  
+  "_comment_interval": "Seconds to wait before processing speech (0.5-5.0)",
+  "processing_interval": 1.5,
+  
+  "_comment_logging": "Logging configuration",
   "logging": {
     "level": "INFO",
     "file": "/tmp/voice_assistant.log"
   },
+  
+  "_comment_commands": "Voice command definitions - each has name, command, and trigger phrases",
   "commands": [
     {
+      "_comment": "===== APPLICATION LAUNCHERS =====",
+      "_info": "Use simple shell commands or full paths to launch applications",
       "name": "Terminal",
       "command": "kgx",
       "phrases": [
@@ -35,56 +46,36 @@
       ]
     },
     {
-      "name": "Spotify",
-      "command": "spotify",
-      "phrases": [
-        "open spotify",
-        "launch spotify",
-        "start music"
-      ]
-    },
-    {
-      "name": "VS Code",
-      "command": "code",
-      "phrases": [
-        "open code",
-        "launch code",
-        "start vscode"
-      ]
-    },
-    {
-      "name": "Calculator",
-      "command": "gnome-calculator",
-      "phrases": [
-        "open calculator",
-        "launch calculator"
-      ]
-    },
-    {
+      "_comment": "===== WINDOW MANAGEMENT WITH YDOTOOL =====",
+      "_info_ydotool": "Format: ydotool key <keycode>:<state> where state is 1=press, 0=release",
+      "_info_modifiers": "Common modifiers: Ctrl=29, Alt=56, Shift=42, Super=125",
       "name": "Show Overview",
       "command": "ydotool key 125:1 125:0",
       "phrases": [
         "show overview",
         "show windows"
-      ]
+      ],
+      "_breakdown": "125:1 = Press Super, 125:0 = Release Super"
     },
     {
-      "name": "Move Left",
+      "name": "Move Left Workspace",
       "command": "ydotool key 125:1 30:1 30:0 125:0",
       "phrases": [
         "move left",
         "go left",
         "left desktop"
-      ]
+      ],
+      "_breakdown": "Super+A: 125:1 (press Super), 30:1 (press A), 30:0 (release A), 125:0 (release Super)"
     },
     {
-      "name": "Move Right",
+      "name": "Move Right Workspace",
       "command": "ydotool key 125:1 32:1 32:0 125:0",
       "phrases": [
         "move right",
         "go right",
         "right desktop"
-      ]
+      ],
+      "_breakdown": "Super+D: 125=Super, 32=D"
     },
     {
       "name": "Switch Window",
@@ -92,31 +83,18 @@
       "phrases": [
         "switch window",
         "next window"
-      ]
+      ],
+      "_breakdown": "Alt+Tab: 56=Alt, 15=Tab"
     },
     {
-      "name": "New Tab",
-      "command": "ydotool key 29:1 15:1 15:0 29:0",
-      "phrases": [
-        "new tab",
-        "next tab"
-      ]
-    },
-    {
-      "name": "Close Window",
-      "command": "ydotool key 125:1 16:1 16:0 125:0",
-      "phrases": [
-        "close window",
-        "close tab"
-      ]
-    },
-    {
+      "_comment": "===== TEXT EDITING SHORTCUTS =====",
       "name": "Copy",
       "command": "ydotool key 29:1 46:1 46:0 29:0",
       "phrases": [
         "copy",
         "copy text"
-      ]
+      ],
+      "_breakdown": "Ctrl+C: 29=Ctrl, 46=C"
     },
     {
       "name": "Paste",
@@ -124,7 +102,8 @@
       "phrases": [
         "paste",
         "paste text"
-      ]
+      ],
+      "_breakdown": "Ctrl+V: 29=Ctrl, 47=V"
     },
     {
       "name": "Cut",
@@ -132,7 +111,16 @@
       "phrases": [
         "cut",
         "cut text"
-      ]
+      ],
+      "_breakdown": "Ctrl+X: 29=Ctrl, 45=X"
+    },
+    {
+      "name": "Select All",
+      "command": "ydotool key 29:1 30:1 30:0 29:0",
+      "phrases": [
+        "select all"
+      ],
+      "_breakdown": "Ctrl+A: 29=Ctrl, 30=A"
     },
     {
       "name": "Undo",
@@ -140,7 +128,8 @@
       "phrases": [
         "undo",
         "undo last"
-      ]
+      ],
+      "_breakdown": "Ctrl+Z: 29=Ctrl, 44=Z"
     },
     {
       "name": "Redo",
@@ -148,85 +137,39 @@
       "phrases": [
         "redo",
         "redo last"
-      ]
+      ],
+      "_breakdown": "Ctrl+Y: 29=Ctrl, 21=Y"
     },
     {
-      "name": "Select All",
-      "command": "ydotool key 29:1 30:1 30:0 29:0",
+      "_comment": "===== BROWSER SHORTCUTS =====",
+      "name": "New Tab",
+      "command": "ydotool key 29:1 20:1 20:0 29:0",
       "phrases": [
-        "select all",
-        "select everything"
-      ]
+        "new tab",
+        "open tab"
+      ],
+      "_breakdown": "Ctrl+T: 29=Ctrl, 20=T"
     },
     {
-      "name": "Volume Up",
-      "command": "ydotool key 115:1 115:0",
+      "name": "Close Tab",
+      "command": "ydotool key 29:1 17:1 17:0 29:0",
       "phrases": [
-        "volume up",
-        "turn up the volume",
-        "increase volume"
-      ]
+        "close tab"
+      ],
+      "_breakdown": "Ctrl+W: 29=Ctrl, 17=W"
     },
     {
-      "name": "Volume Down",
-      "command": "ydotool key 114:1 114:0",
+      "name": "Reopen Tab",
+      "command": "ydotool key 29:1 42:1 20:1 20:0 42:0 29:0",
       "phrases": [
-        "volume down",
-        "turn down the volume",
-        "decrease volume"
-      ]
+        "reopen tab",
+        "restore tab"
+      ],
+      "_breakdown": "Ctrl+Shift+T: 29=Ctrl, 42=Shift, 20=T, then release in reverse order"
     },
     {
-      "name": "Mute",
-      "command": "ydotool key 113:1 113:0",
-      "phrases": [
-        "mute",
-        "mute audio",
-        "silence"
-      ]
-    },
-    {
-      "name": "Lock Screen",
-      "command": "ydotool key 125:1 46:1 46:0 125:0",
-      "phrases": [
-        "lock screen",
-        "lock my screen"
-      ]
-    },
-    {
-      "name": "Screenshot",
-      "command": "ydotool key 107:1 107:0",
-      "phrases": [
-        "screenshot",
-        "take screenshot"
-      ]
-    },
-    {
-      "name": "Sleep",
-      "command": "systemctl suspend",
-      "phrases": [
-        "sleep",
-        "suspend"
-      ]
-    },
-    {
-      "name": "System Update",
-      "command": "kgx -e yay -Syu",
-      "phrases": [
-        "update the system",
-        "system update",
-        "update system"
-      ]
-    },
-    {
-      "name": "Facebook",
-      "command": "firefox https://facebook.com/",
-      "phrases": [
-        "open facebook",
-        "facebook"
-      ]
-    },
-    {
+      "_comment": "===== SPECIAL MODE CONTROL =====",
+      "_info_exit": "Special command to exit command mode back to normal mode",
       "name": "Exit Command Mode",
       "command": "exit_command_mode",
       "phrases": [
@@ -238,6 +181,8 @@
       ]
     }
   ],
+  
+  "_comment_typing_mode": "Configuration for typing mode (speech-to-text)",
   "typing_mode": {
     "exit_phrases": [
       "stop typing",
@@ -246,5 +191,56 @@
       "go to normal mode"
     ],
     "check_recent_chars": 100
+  },
+  
+  "_reference_keycodes": {
+    "_comment": "===== YDOTOOL KEY CODE REFERENCE =====",
+    "_usage": "Use these codes to build custom keyboard shortcuts",
+    
+    "modifiers": {
+      "Ctrl_Left": 29,
+      "Alt_Left": 56,
+      "Shift_Left": 42,
+      "Super": 125,
+      "Ctrl_Right": 97,
+      "Alt_Right": 100,
+      "Shift_Right": 54
+    },
+    
+    "letters": {
+      "A": 30, "B": 48, "C": 46, "D": 32, "E": 18, "F": 33,
+      "G": 34, "H": 35, "I": 23, "J": 36, "K": 37, "L": 38,
+      "M": 50, "N": 49, "O": 24, "P": 25, "Q": 16, "R": 19,
+      "S": 31, "T": 20, "U": 22, "V": 47, "W": 17, "X": 45,
+      "Y": 21, "Z": 44
+    },
+    
+    "numbers": {
+      "1": 2, "2": 3, "3": 4, "4": 5, "5": 6,
+      "6": 7, "7": 8, "8": 9, "9": 10, "0": 11
+    },
+    
+    "function_keys": {
+      "F1": 59, "F2": 60, "F3": 61, "F4": 62,
+      "F5": 63, "F6": 64, "F7": 65, "F8": 66,
+      "F9": 67, "F10": 68, "F11": 87, "F12": 88
+    },
+    
+    "special_keys": {
+      "Esc": 1, "Tab": 15, "Space": 57, "Enter": 28,
+      "Backspace": 14, "Delete": 111, "Insert": 110
+    },
+    
+    "navigation": {
+      "Up": 103, "Down": 108, "Left": 105, "Right": 106,
+      "Home": 102, "End": 107, "PageUp": 104, "PageDown": 109
+    },
+    
+    "_examples": {
+      "_simple": "ydotool key 125:1 125:0  (Press and release Super)",
+      "_shortcut": "ydotool key 29:1 46:1 46:0 29:0  (Ctrl+C)",
+      "_triple": "ydotool key 29:1 42:1 20:1 20:0 42:0 29:0  (Ctrl+Shift+T)",
+      "_pattern": "Always press keys in order, then release in reverse order"
+    }
   }
 }

@@ -6,7 +6,6 @@ import GLib from 'gi://GLib';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
-import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 // Import modular components
@@ -107,9 +106,6 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         this._settings = settings;
         this._configManager = new ConfigManager(this._settings);
         
-        // Notification source
-        this._notificationSource = null;
-        
         // Setup D-Bus connection
         this._setupDBus();
         
@@ -132,11 +128,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
                 (proxy, error) => {
                     if (error) {
                         console.error('Voice Assistant: D-Bus connection error:', error);
-                        this._showNotification(
-                            'Service Error',
-                            'Failed to connect to Voice Assistant service',
-                            MessageTray.Urgency.HIGH
-                        );
+                        console.error('Failed to connect to Voice Assistant service');
                         return;
                     }
                     
@@ -257,16 +249,8 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         
         syncableKeys.forEach(key => {
             this._settings.connect(`changed::${key}`, () => {
-                if (this._settings.get_boolean('auto-sync')) {
-                    this._syncSettingsToService();
-                }
-            });
-        });
-        
-        this._settings.connect('changed::auto-sync', () => {
-            if (this._settings.get_boolean('auto-sync')) {
                 this._syncSettingsToService();
-            }
+            });
         });
     }
     
@@ -292,7 +276,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     
     _setMode(mode) {
         if (!this._proxy) {
-            this._showNotification('Error', 'Service not connected', MessageTray.Urgency.HIGH);
+            console.error('Voice Assistant: Service not connected');
             return;
         }
         
@@ -300,7 +284,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             this._proxy.SetModeRemote(mode, (result, error) => {
                 if (error) {
                     console.error('Voice Assistant: SetMode error:', error);
-                    this._showNotification('Error', 'Failed to change mode', MessageTray.Urgency.HIGH);
+                    console.error('Failed to change mode');
                 }
             });
         } catch (e) {
@@ -310,7 +294,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     
     _startService() {
         if (!this._proxy) {
-            this._showNotification('Error', 'Service not connected', MessageTray.Urgency.HIGH);
+            console.error('Voice Assistant: Service not connected');
             return;
         }
         
@@ -318,7 +302,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             this._proxy.StartRemote((result, error) => {
                 if (error) {
                     console.error('Voice Assistant: Start error:', error);
-                    this._showNotification('Error', 'Failed to start service', MessageTray.Urgency.HIGH);
+                    console.error('Failed to start service');
                 }
             });
         } catch (e) {
@@ -380,13 +364,8 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         this._currentMode = newMode;
         this._updateDisplay();
         
-        if (this._settings.get_boolean('notification-enabled')) {
-            this._showNotification(
-                'Mode Changed',
-                `Switched from ${oldMode} to ${newMode}`,
-                MessageTray.Urgency.NORMAL
-            );
-        }
+        // Mode changes are shown in the panel, no notification needed
+        console.log(`Voice Assistant: Mode changed from ${oldMode} to ${newMode}`);
     }
     
     _onBufferChanged(buffer) {
@@ -397,13 +376,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     _onCommandExecuted(command, phrase, confidence) {
         console.log(`Voice Assistant: Command executed: ${phrase} (${(confidence * 100).toFixed(1)}%)`);
         
-        if (this._settings.get_boolean('notification-enabled')) {
-            this._showNotification(
-                'Command Executed',
-                `${phrase} (${(confidence * 100).toFixed(1)}% confidence)`,
-                MessageTray.Urgency.NORMAL
-            );
-        }
+        // Command execution logged to console only, no notifications
     }
     
     _onStatusChanged(status) {
@@ -422,17 +395,11 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     
     _onError(message, details) {
         console.error('Voice Assistant:', message, details);
-        this._showNotification('Error', message, MessageTray.Urgency.HIGH);
     }
     
     _onNotification(title, message, urgency) {
-        if (!this._settings.get_boolean('notification-enabled')) return;
-        
-        const urgencyLevel = urgency === 'high' ? MessageTray.Urgency.HIGH :
-                           urgency === 'low' ? MessageTray.Urgency.LOW :
-                           MessageTray.Urgency.NORMAL;
-        
-        this._showNotification(title, message, urgencyLevel);
+        // Notifications disabled - service notifications are logged only
+        console.log(`Voice Assistant notification: ${title} - ${message}`);
     }
     
     // UI updates
@@ -487,25 +454,6 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         if (this._startItem) this._startItem.setSensitive(!this._isRunning);
         if (this._stopItem) this._stopItem.setSensitive(this._isRunning);
         if (this._restartItem) this._restartItem.setSensitive(this._isRunning);
-    }
-    
-    _showNotification(title, message, urgency) {
-        if (!this._notificationSource) {
-            this._notificationSource = new MessageTray.Source({
-                title: 'Voice Assistant',
-                iconName: 'microphone-sensitivity-medium-symbolic'
-            });
-            Main.messageTray.add(this._notificationSource);
-        }
-        
-        const notification = new MessageTray.Notification({
-            source: this._notificationSource,
-            title: title,
-            body: message,
-            urgency: urgency
-        });
-        
-        this._notificationSource.addNotification(notification);
     }
     
     destroy() {

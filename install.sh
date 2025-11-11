@@ -55,7 +55,7 @@ mkdir -p "$HOME/.config/nerd-dictation"
 
 # Copy config if it doesn't exist
 if [ ! -f "$HOME/.config/nerd-dictation/config.json" ]; then
-    echo "Creating default config..."
+    echo "Creating default config (with comprehensive ydotool documentation)..."
     cp "$PROJECT_DIR/config.json" "$HOME/.config/nerd-dictation/config.json"
 fi
 
@@ -77,4 +77,5 @@ echo "   journalctl --user -u voice-assistant.service -f"
 echo
 echo "5. Configure via extension preferences or edit:"
 echo "   ~/.config/nerd-dictation/config.json"
+echo "   (Includes comprehensive ydotool key code reference)"
 echo

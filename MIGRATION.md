@@ -39,11 +39,12 @@ cp ~/.config/nerd-dictation/config.json ~/.config/nerd-dictation/config.json.bac
 # Your config file will work with the new system!
 ```
 
-### 2. Stop Old System
+### 2. Stop Old System (If Running)
 
 ```bash
 # Stop nerd-dictation if running
-./stop-nerd.sh
+pkill -f nerd-dictation
+pkill -f voice_assistant
 
 # Disable old GNOME extension (if you had one)
 gnome-extensions disable voice-assistant@saim

@@ -128,6 +128,7 @@ private:
     std::string m_hotword;
     double m_commandThreshold;
     double m_processingInterval;
+    std::vector<std::string> m_typingExitPhrases;
     std::string m_configPath;
     mutable std::mutex m_configMutex;
 
