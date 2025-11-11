@@ -191,7 +191,7 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
         window.add(page);
     }
 
-    _createAboutPage(window, settings) {
+    _createModelsPage(window, settings) {
         const page = new Adw.PreferencesPage({
             title: 'Models',
             icon_name: 'folder-download-symbolic',
