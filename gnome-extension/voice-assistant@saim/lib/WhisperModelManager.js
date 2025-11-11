@@ -222,10 +222,29 @@ export class WhisperModelManager {
     }
 
     /**
-     * Get current model from directory (first .bin file found, or tiny.en by default)
+     * Get current model from config file, or fallback to checking directory
      */
     _getCurrentModel() {
         try {
+            // First, try to read from config file
+            const configPath = GLib.get_home_dir() + '/.config/nerd-dictation/config.json';
+            const configFile = Gio.File.new_for_path(configPath);
+            
+            if (configFile.query_exists(null)) {
+                let [success, contents] = configFile.load_contents(null);
+                if (success) {
+                    const config = JSON.parse(new TextDecoder().decode(contents));
+                    if (config.whisper_model) {
+                        // Verify the model file actually exists
+                        const modelFile = Gio.File.new_for_path(`${this._modelDir}/${config.whisper_model}`);
+                        if (modelFile.query_exists(null)) {
+                            return config.whisper_model;
+                        }
+                    }
+                }
+            }
+            
+            // Fallback: check directory for installed models
             const dir = Gio.File.new_for_path(this._modelDir);
             if (!dir.query_exists(null)) {
                 return null;
@@ -238,9 +257,9 @@ export class WhisperModelManager {
             );
 
             let fileInfo;
+            // Prefer tiny.en as default
             while ((fileInfo = enumerator.next_file(null))) {
                 const name = fileInfo.get_name();
-                // Prefer tiny.en as default
                 if (name === 'ggml-tiny.en.bin') {
                     return name;
                 }
@@ -334,19 +353,54 @@ export class WhisperModelManager {
     }
 
     /**
-     * Select a model (models are auto-selected by the C++ service, just verify it exists)
+     * Select a model (save to config and restart service)
      */
     _selectModel(model, window) {
-        // The C++ service automatically uses models from the directory
-        // We just need to restart the service for it to pick up the change
-        this._showToast(window, `${model.name} selected. Restart the service to apply.`);
-        
-        // Optionally restart the service automatically
         try {
+            // Load current config
+            const configPath = GLib.get_home_dir() + '/.config/nerd-dictation/config.json';
+            const configFile = Gio.File.new_for_path(configPath);
+            
+            if (!configFile.query_exists(null)) {
+                this._showToast(window, 'Configuration file not found. Please start the service first.');
+                return;
+            }
+            
+            let [success, contents] = configFile.load_contents(null);
+            if (!success) {
+                this._showToast(window, 'Failed to read configuration file');
+                return;
+            }
+            
+            let config = JSON.parse(new TextDecoder().decode(contents));
+            
+            // Update the whisper_model field
+            config.whisper_model = model.file;
+            
+            // Save back to file
+            const configJson = JSON.stringify(config, null, 2);
+            configFile.replace_contents(
+                configJson,
+                null,
+                false,
+                Gio.FileCreateFlags.REPLACE_DESTINATION,
+                null
+            );
+            
+            this._showToast(window, `Selected ${model.name}. Restarting service...`);
+            
+            // Restart the service to apply the change
             GLib.spawn_command_line_async('systemctl --user restart voice-assistant.service');
-            this._showToast(window, 'Restarting voice assistant service...');
+            
+            // Show notification after a delay
+            GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
+                this._showToast(window, `Now using ${model.name} model`);
+                return GLib.SOURCE_REMOVE;
+            });
+            
         } catch (e) {
-            console.error('Failed to restart service:', e);
+            console.error('Failed to select model:', e);
+            this._showToast(window, `Failed to select model: ${e.message}`);
         }
     }
 

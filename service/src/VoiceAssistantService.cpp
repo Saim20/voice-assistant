@@ -24,6 +24,7 @@ VoiceAssistantService::VoiceAssistantService(sdbus::IConnection& connection, std
     , m_hotword("hey")
     , m_commandThreshold(0.8)
     , m_processingInterval(1.5)
+    , m_whisperModel("ggml-tiny.en.bin")
     , m_typingExitPhrases({"stop typing", "exit typing", "normal mode", "go to normal mode"})
     , m_stopAudioThread(false)
     , m_pulseAudio(nullptr)
@@ -210,6 +211,10 @@ void VoiceAssistantService::SetConfigValue(const std::string& key, const sdbus::
         m_commandThreshold = value.get<double>();
     } else if (key == "processing_interval") {
         m_processingInterval = value.get<double>();
+    } else if (key == "whisper_model") {
+        m_whisperModel = value.get<std::string>();
+        log("INFO", "Whisper model changed to: " + m_whisperModel);
+        // Note: Service needs restart to reload the new model
     }
     
     saveConfig();
@@ -357,8 +362,8 @@ void VoiceAssistantService::emitNotification(const std::string& title,
 bool VoiceAssistantService::initializeWhisper(const std::string& modelPath) {
     m_modelPath = modelPath;
     
-    // Use tiny.en model (smallest, ~75MB)
-    std::string modelFile = modelPath + "/ggml-tiny.en.bin";
+    // Use configured model, or default to tiny.en
+    std::string modelFile = modelPath + "/" + m_whisperModel;
     
     // Initialize whisper context
     whisper_context_params cparams = whisper_context_default_params();
@@ -769,6 +774,7 @@ Json::Value VoiceAssistantService::configToJson() const {
     root["hotword"] = m_hotword;
     root["command_threshold"] = m_commandThreshold;
     root["processing_interval"] = m_processingInterval;
+    root["whisper_model"] = m_whisperModel;
     
     Json::Value logging;
     logging["level"] = "INFO";
@@ -806,6 +812,11 @@ void VoiceAssistantService::jsonToConfig(const Json::Value& json) {
     
     if (json.isMember("processing_interval")) {
         m_processingInterval = json["processing_interval"].asDouble();
+    }
+    
+    if (json.isMember("whisper_model")) {
+        m_whisperModel = json["whisper_model"].asString();
+        log("INFO", "Whisper model configured: " + m_whisperModel);
     }
     
     // Load typing mode exit phrases

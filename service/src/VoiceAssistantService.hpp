@@ -113,6 +113,7 @@ private:
     whisper_context* m_whisperCtx;
     whisper_full_params m_whisperParams;
     std::string m_modelPath;
+    std::string m_whisperModel;
 
     // State
     std::atomic<bool> m_isRunning;
@@ -126,8 +127,8 @@ private:
 
     // Configuration
     std::string m_hotword;
-    double m_commandThreshold;
     double m_processingInterval;
+    double m_commandThreshold;
     std::vector<std::string> m_typingExitPhrases;
     std::string m_configPath;
     mutable std::mutex m_configMutex;
