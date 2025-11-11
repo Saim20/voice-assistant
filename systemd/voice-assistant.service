@@ -1,0 +1,29 @@
+[Unit]
+Description=Voice Assistant Service with Whisper.cpp
+Documentation=https://github.com/saim/voice-assistant-gnome
+After=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=com.github.saim.VoiceAssistant
+ExecStart=%h/.local/bin/voice-assistant-service
+Restart=on-failure
+RestartSec=5
+
+# Environment
+Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin"
+Environment="DISPLAY=:0"
+Environment="WAYLAND_DISPLAY=wayland-0"
+Environment="XDG_RUNTIME_DIR=/run/user/%U"
+Environment="DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%U/bus"
+Environment="XDG_SESSION_TYPE=wayland"
+
+# Security - Relaxed for GUI app launching
+PrivateTmp=false
+NoNewPrivileges=false
+
+# Allow access to config and model directories
+ReadWritePaths=%h/.config/nerd-dictation
+
+[Install]
+WantedBy=default.target

@@ -1,9 +1,9 @@
 {
   "uuid": "voice-assistant@saim",
   "name": "Voice Assistant",
-  "description": "Voice control integration with nerd-dictation - shows current mode and provides controls",
-  "version": "1.0",
-  "shell-version": ["45", "46", "47", "48"],
+  "description": "Voice control integration with whisper.cpp - shows current mode and provides controls",
+  "version": "2.0",
+  "shell-version": ["45", "46", "47", "48", "49"],
   "url": "https://github.com/saim/voice-assistant-gnome",
   "settings-schema": "org.gnome.shell.extensions.voice-assistant"
 }

@@ -6,135 +6,217 @@ import GLib from 'gi://GLib';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
+import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 // Import modular components
 import {ConfigManager} from './lib/ConfigManager.js';
 
+// D-Bus interface XML
+const VoiceAssistantIface = `
+<node>
+  <interface name="com.github.saim.VoiceAssistant">
+    <method name="SetMode">
+      <arg direction="in" name="mode" type="s"/>
+    </method>
+    <method name="GetMode">
+      <arg direction="out" name="mode" type="s"/>
+    </method>
+    <method name="GetStatus">
+      <arg direction="out" name="status" type="a{sv}"/>
+    </method>
+    <method name="GetConfig">
+      <arg direction="out" name="config" type="s"/>
+    </method>
+    <method name="UpdateConfig">
+      <arg direction="in" name="config" type="s"/>
+    </method>
+    <method name="SetConfigValue">
+      <arg direction="in" name="key" type="s"/>
+      <arg direction="in" name="value" type="v"/>
+    </method>
+    <method name="Start"/>
+    <method name="Stop"/>
+    <method name="Restart"/>
+    <method name="GetBuffer">
+      <arg direction="out" name="buffer" type="s"/>
+    </method>
+    <signal name="ModeChanged">
+      <arg name="new_mode" type="s"/>
+      <arg name="old_mode" type="s"/>
+    </signal>
+    <signal name="BufferChanged">
+      <arg name="buffer" type="s"/>
+    </signal>
+    <signal name="CommandExecuted">
+      <arg name="command" type="s"/>
+      <arg name="phrase" type="s"/>
+      <arg name="confidence" type="d"/>
+    </signal>
+    <signal name="StatusChanged">
+      <arg name="status" type="a{sv}"/>
+    </signal>
+    <signal name="Error">
+      <arg name="message" type="s"/>
+      <arg name="details" type="s"/>
+    </signal>
+    <signal name="Notification">
+      <arg name="title" type="s"/>
+      <arg name="message" type="s"/>
+      <arg name="urgency" type="s"/>
+    </signal>
+    <property name="IsRunning" type="b" access="read"/>
+    <property name="CurrentMode" type="s" access="read"/>
+    <property name="CurrentBuffer" type="s" access="read"/>
+    <property name="Version" type="s" access="read"/>
+  </interface>
+</node>`;
+
+const VoiceAssistantProxy = Gio.DBusProxy.makeProxyWrapper(VoiceAssistantIface);
+
 const VoiceAssistantIndicator = GObject.registerClass(
 class VoiceAssistantIndicator extends PanelMenu.Button {
-    _init() {
+    _init(settings) {
         super._init(0.0, 'Voice Assistant');
         
-        // Create a horizontal box layout to hold icon and text
+        // Create panel UI
         this._box = new St.BoxLayout({
             style_class: 'panel-status-menu-box'
         });
         this.add_child(this._box);
         
         this._icon = new St.Icon({
-            icon_name: 'applications-system-symbolic',
+            icon_name: 'microphone-sensitivity-medium-symbolic',
             style_class: 'system-status-icon'
         });
         this._box.add_child(this._icon);
         
-        // Add buffer text label
         this._bufferLabel = new St.Label({
             text: '',
             style_class: 'voice-assistant-buffer-text',
-            y_align: 2  // Middle alignment
+            y_align: 2
         });
         this._box.add_child(this._bufferLabel);
         
-        // Initialize state
+        // State
         this._currentMode = 'normal';
         this._currentBuffer = '';
-        this._lastBufferUpdate = 0;
-        this._lastProcessedText = '';
-        this._processedTextHashes = new Set();
-        this._lastCommandTime = 0;
-        this._lastExecutedText = '';
-        this._processingTimer = null;
-        this._bufferClearTimer = null;
-        this._bufferTimeoutTimer = null;
-        this._debounceTimer = null;
+        this._isRunning = false;
         
-        // Load configuration using ConfigManager
-        this._settings = new Gio.Settings({ schema: 'org.gnome.shell.extensions.voice-assistant' });
+        // Settings
+        this._settings = settings;
         this._configManager = new ConfigManager(this._settings);
-        this._config = this._configManager.getConfig();
         
-        this._setupSettingsHandlers();
+        // Notification source
+        this._notificationSource = null;
+        
+        // Setup D-Bus connection
+        this._setupDBus();
+        
+        // Setup menu
         this._setupMenu();
-        this._setupFileWatchers();
-        this._updateDisplay();
         
-        // Load commands using the config manager
-        this._loadCommands();
+        // Setup settings handlers
+        this._setupSettingsHandlers();
         
-        console.log('Voice Assistant: Initialized with persistent state management');
+        console.log('Voice Assistant: Extension initialized with D-Bus');
     }
     
-    _loadCommands() {
-        this._commands = {};
-        this._allPhrases = [];
-        
+    _setupDBus() {
         try {
-            const commands = this._config.commands || [];
-            
-            // New simplified structure: each command has name, command, and phrases
-            for (const commandDef of commands) {
-                if (commandDef.phrases && Array.isArray(commandDef.phrases) && commandDef.command) {
-                    for (const phrase of commandDef.phrases) {
-                        this._commands[phrase.toLowerCase()] = commandDef.command;
-                        this._allPhrases.push(phrase.toLowerCase());
+            // Create proxy to the D-Bus service
+            this._proxy = new VoiceAssistantProxy(
+                Gio.DBus.session,
+                'com.github.saim.VoiceAssistant',
+                '/com/github/saim/VoiceAssistant',
+                (proxy, error) => {
+                    if (error) {
+                        console.error('Voice Assistant: D-Bus connection error:', error);
+                        this._showNotification(
+                            'Service Error',
+                            'Failed to connect to Voice Assistant service',
+                            MessageTray.Urgency.HIGH
+                        );
+                        return;
                     }
+                    
+                    this._onDBusConnected();
                 }
-            }
+            );
             
-            console.log(`Voice Assistant: Loaded ${this._allPhrases.length} command phrases`);
         } catch (e) {
-            console.log(`Voice Assistant: Error loading commands: ${e}`);
+            console.error('Voice Assistant: Failed to create D-Bus proxy:', e);
         }
     }
     
-    _setupSettingsHandlers() {
-        // Listen for settings changes and update config file if auto-sync is enabled
-        const syncableKeys = ['command-threshold', 'processing-interval', 'hotword'];
+    _onDBusConnected() {
+        console.log('Voice Assistant: Connected to D-Bus service');
         
-        syncableKeys.forEach(key => {
-            this._settings.connect(`changed::${key}`, () => {
-                if (this._settings.get_boolean('auto-sync')) {
-                    this._configManager.syncSettingsToConfig();
-                    // Reload config to get the updated values
-                    this._config = this._configManager.getConfig();
-                }
-            });
+        // Connect to signals
+        this._proxy.connectSignal('ModeChanged', (proxy, sender, [newMode, oldMode]) => {
+            this._onModeChanged(newMode, oldMode);
         });
         
-        // Also watch for auto-sync setting changes
-        this._settings.connect('changed::auto-sync', () => {
-            if (this._settings.get_boolean('auto-sync')) {
-                this._configManager.syncSettingsToConfig();
-            }
+        this._proxy.connectSignal('BufferChanged', (proxy, sender, [buffer]) => {
+            this._onBufferChanged(buffer);
+        });
+        
+        this._proxy.connectSignal('CommandExecuted', (proxy, sender, [command, phrase, confidence]) => {
+            this._onCommandExecuted(command, phrase, confidence);
+        });
+        
+        this._proxy.connectSignal('StatusChanged', (proxy, sender, [status]) => {
+            this._onStatusChanged(status);
+        });
+        
+        this._proxy.connectSignal('Error', (proxy, sender, [message, details]) => {
+            this._onError(message, details);
+        });
+        
+        this._proxy.connectSignal('Notification', (proxy, sender, [title, message, urgency]) => {
+            this._onNotification(title, message, urgency);
+        });
+        
+        // Get initial status
+        this._updateStatus();
+        
+        // Poll status periodically
+        this._statusTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
+            this._updateStatus();
+            return GLib.SOURCE_CONTINUE;
         });
     }
     
     _setupMenu() {
-        // Current mode display
-        this._modeItem = new PopupMenu.PopupMenuItem(`Mode: ${this._currentMode.toUpperCase()}`, {
+        // Mode display
+        this._modeItem = new PopupMenu.PopupMenuItem(`Mode: NORMAL`, {
             reactive: false
         });
         this.menu.addMenuItem(this._modeItem);
         
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         
-        // Nerd-dictation control section
-        this._controlItem = new PopupMenu.PopupMenuItem('Voice Assistant: Checking...', {
+        // Service control
+        this._serviceStatusItem = new PopupMenu.PopupMenuItem('Service: Checking...', {
             reactive: false
         });
-        this.menu.addMenuItem(this._controlItem);
+        this.menu.addMenuItem(this._serviceStatusItem);
         
-        this._startItem = new PopupMenu.PopupMenuItem('Start Voice Assistant');
-        this._startItem.connect('activate', () => this._startNerdDictation());
+        this._startItem = new PopupMenu.PopupMenuItem('Start Service');
+        this._startItem.connect('activate', () => this._startService());
         this.menu.addMenuItem(this._startItem);
 
-        this._stopItem = new PopupMenu.PopupMenuItem('Stop Voice Assistant');
-        this._stopItem.connect('activate', () => this._stopNerdDictation());
+        this._stopItem = new PopupMenu.PopupMenuItem('Stop Service');
+        this._stopItem.connect('activate', () => this._stopService());
         this.menu.addMenuItem(this._stopItem);
+
+        this._restartItem = new PopupMenu.PopupMenuItem('Restart Service');
+        this._restartItem.connect('activate', () => this._restartService());
+        this.menu.addMenuItem(this._restartItem);
 
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         
-        // Mode switching buttons
+        // Mode switching
         this._normalModeItem = new PopupMenu.PopupMenuItem('Switch to Normal Mode');
         this._normalModeItem.connect('activate', () => this._setMode('normal'));
         this.menu.addMenuItem(this._normalModeItem);
@@ -149,786 +231,317 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         
-        // Status item
-        this._statusItem = new PopupMenu.PopupMenuItem('Ready', {
-            reactive: false
-        });
-        this.menu.addMenuItem(this._statusItem);
-        
-        // Buffer display item
+        // Buffer display
         this._bufferItem = new PopupMenu.PopupMenuItem('Buffer: (empty)', {
             reactive: false
         });
         this.menu.addMenuItem(this._bufferItem);
         
-        // Timing info item
-        this._timingItem = new PopupMenu.PopupMenuItem('Last input: never', {
-            reactive: false
-        });
-        this.menu.addMenuItem(this._timingItem);
-        
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         
-        // Preferences item
+        // Preferences
         this._prefsItem = new PopupMenu.PopupMenuItem('Preferences');
         this._prefsItem.connect('activate', () => {
             try {
                 GLib.spawn_command_line_async('gnome-extensions prefs voice-assistant@saim');
             } catch (e) {
-                console.log(`Voice Assistant: Error opening preferences: ${e}`);
+                console.error('Voice Assistant: Error opening preferences:', e);
             }
         });
         this.menu.addMenuItem(this._prefsItem);
+    }
+    
+    _setupSettingsHandlers() {
+        // When settings change, sync to D-Bus service
+        const syncableKeys = ['hotword', 'command-threshold', 'processing-interval'];
         
-        // Update control status
-        this._updateControlStatus();
+        syncableKeys.forEach(key => {
+            this._settings.connect(`changed::${key}`, () => {
+                if (this._settings.get_boolean('auto-sync')) {
+                    this._syncSettingsToService();
+                }
+            });
+        });
         
-        // Set up periodic status checking
-        this._statusTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 5, () => {
-            this._updateControlStatus();
-            return GLib.SOURCE_CONTINUE;
+        this._settings.connect('changed::auto-sync', () => {
+            if (this._settings.get_boolean('auto-sync')) {
+                this._syncSettingsToService();
+            }
         });
     }
     
-    _setupFileWatchers() {
+    _syncSettingsToService() {
+        if (!this._proxy) return;
+        
         try {
-            // Watch mode file
-            this._modeFile = Gio.File.new_for_path('/tmp/nerd-dictation.mode');
-            this._modeMonitor = this._modeFile.monitor_file(Gio.FileMonitorFlags.NONE, null);
-            this._modeMonitor.connect('changed', () => {
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-                    this._onModeChanged();
-                    return GLib.SOURCE_REMOVE;
-                });
-            });
+            const hotword = this._settings.get_string('hotword');
+            const threshold = this._settings.get_double('command-threshold') / 100.0;
+            const interval = this._settings.get_double('processing-interval');
             
-            // Watch buffer file with immediate processing
-            this._bufferFile = Gio.File.new_for_path('/tmp/nerd-dictation.buffer');
-            this._bufferMonitor = this._bufferFile.monitor_file(Gio.FileMonitorFlags.NONE, null);
-            this._bufferMonitor.connect('changed', () => {
-                // Process buffer changes immediately with a small delay for file settling
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-                    this._onBufferChanged();
-                    return GLib.SOURCE_REMOVE;
-                });
-            });
+            this._proxy.SetConfigValueRemote('hotword', new GLib.Variant('s', hotword));
+            this._proxy.SetConfigValueRemote('command_threshold', new GLib.Variant('d', threshold));
+            this._proxy.SetConfigValueRemote('processing_interval', new GLib.Variant('d', interval));
             
-            // Initial reads
-            this._onModeChanged();
-            this._onBufferChanged();
+            console.log('Voice Assistant: Settings synced to service');
         } catch (e) {
-            console.log(`Voice Assistant: Error setting up file watchers: ${e}`);
+            console.error('Voice Assistant: Error syncing settings:', e);
         }
     }
     
-    _onModeChanged() {
+    // D-Bus method wrappers
+    
+    _setMode(mode) {
+        if (!this._proxy) {
+            this._showNotification('Error', 'Service not connected', MessageTray.Urgency.HIGH);
+            return;
+        }
+        
         try {
-            if (this._modeFile.query_exists(null)) {
-                let [success, contents] = this._modeFile.load_contents(null);
-                if (success) {
-                    let newMode = new TextDecoder().decode(contents).trim();
-                    if (newMode && newMode !== this._currentMode) {
-                        const oldMode = this._currentMode;
-                        console.log(`Voice Assistant: Mode changed from ${oldMode} to ${newMode}`);
-                        this._currentMode = newMode;
-                        
-                        // Show notification for mode change
-                        this._showNotification('Voice Assistant', `Switched to ${newMode.toUpperCase()} mode`);
-                        
-                        // Clear buffer and timers on mode change
-                        this._clearProcessingTimer();
-                        this._clearBufferClearTimer();
-                        this._clearBufferTimeoutTimer();
-                        
-                        // Reset typing mode state
-                        if (newMode === 'typing') {
-                            this._lastTypingText = '';
-                        }
-                        
-                        this._updateDisplay();
-                    }
+            this._proxy.SetModeRemote(mode, (result, error) => {
+                if (error) {
+                    console.error('Voice Assistant: SetMode error:', error);
+                    this._showNotification('Error', 'Failed to change mode', MessageTray.Urgency.HIGH);
                 }
-            }
+            });
         } catch (e) {
-            console.log(`Voice Assistant: Error reading mode file: ${e}`);
+            console.error('Voice Assistant: SetMode exception:', e);
         }
     }
     
-    _onBufferChanged() {
+    _startService() {
+        if (!this._proxy) {
+            this._showNotification('Error', 'Service not connected', MessageTray.Urgency.HIGH);
+            return;
+        }
+        
         try {
-            if (this._bufferFile.query_exists(null)) {
-                let [success, contents] = this._bufferFile.load_contents(null);
-                if (success) {
-                    let newBuffer = new TextDecoder().decode(contents).trim();
-                    
-                    if (newBuffer !== this._currentBuffer) {
-                        console.log(`Voice Assistant: Raw buffer change detected: "${newBuffer}"`);
-                        
-                        // Additional check: if buffer was recently cleared and this is the same text,
-                        // it might be from a suspend/resume cycle - ignore it
-                        if (this._lastCommandTime && 
-                            (Date.now() - this._lastCommandTime) < 2000 && 
-                            this._lastExecutedText === newBuffer.toLowerCase()) {
-                            console.log(`Voice Assistant: Ignoring duplicate text from suspend/resume cycle: "${newBuffer}"`);
-                            return;
-                        }
-                        
-                        // Clear existing debounce timer
-                        if (this._debounceTimer) {
-                            GLib.source_remove(this._debounceTimer);
-                            this._debounceTimer = null;
-                        }
-                        
-                        // Update buffer immediately
-                        this._currentBuffer = newBuffer;
-                        
-                        // Set up debounced processing (process the current buffer, not the captured value)
-                        this._debounceTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
-                            this._processBufferChange();
-                            this._debounceTimer = null;
-                            return GLib.SOURCE_REMOVE;
-                        });
-                    }
+            this._proxy.StartRemote((result, error) => {
+                if (error) {
+                    console.error('Voice Assistant: Start error:', error);
+                    this._showNotification('Error', 'Failed to start service', MessageTray.Urgency.HIGH);
                 }
-            } else {
-                // Buffer file doesn't exist, clear buffer
-                if (this._currentBuffer !== '') {
-                    this._currentBuffer = '';
-                    this._clearBufferTimeoutTimer();
-                    this._updateDisplay();
-                }
-            }
+            });
         } catch (e) {
-            console.log(`Voice Assistant: Error reading buffer file: ${e}`);
+            console.error('Voice Assistant: Start exception:', e);
         }
     }
     
-    _processBufferChange() {
-        const now = Date.now();
-        this._lastBufferUpdate = now;
+    _stopService() {
+        if (!this._proxy) return;
         
-        console.log(`Voice Assistant: Buffer updated (${this._currentMode} mode): "${this._currentBuffer}"`);
+        try {
+            this._proxy.StopRemote((result, error) => {
+                if (error) {
+                    console.error('Voice Assistant: Stop error:', error);
+                }
+            });
+        } catch (e) {
+            console.error('Voice Assistant: Stop exception:', e);
+        }
+    }
+    
+    _restartService() {
+        if (!this._proxy) return;
         
-        // Clear all existing timers when new text arrives
-        this._clearBufferTimeoutTimer();
-        this._clearProcessingTimer();
-        this._clearBufferClearTimer();
+        try {
+            this._proxy.RestartRemote((result, error) => {
+                if (error) {
+                    console.error('Voice Assistant: Restart error:', error);
+                }
+            });
+        } catch (e) {
+            console.error('Voice Assistant: Restart exception:', e);
+        }
+    }
+    
+    _updateStatus() {
+        if (!this._proxy) return;
         
-        // Process the buffer based on current mode
-        this._processBuffer(this._currentBuffer);
+        try {
+            this._proxy.GetStatusRemote((result, error) => {
+                if (error) {
+                    console.error('Voice Assistant: GetStatus error:', error);
+                    return;
+                }
+                
+                if (result && result[0]) {
+                    const status = result[0];
+                    this._onStatusChanged(status);
+                }
+            });
+        } catch (e) {
+            console.error('Voice Assistant: GetStatus exception:', e);
+        }
+    }
+    
+    // Signal handlers
+    
+    _onModeChanged(newMode, oldMode) {
+        this._currentMode = newMode;
+        this._updateDisplay();
+        
+        if (this._settings.get_boolean('notification-enabled')) {
+            this._showNotification(
+                'Mode Changed',
+                `Switched from ${oldMode} to ${newMode}`,
+                MessageTray.Urgency.NORMAL
+            );
+        }
+    }
+    
+    _onBufferChanged(buffer) {
+        this._currentBuffer = buffer;
+        this._updateDisplay();
+    }
+    
+    _onCommandExecuted(command, phrase, confidence) {
+        console.log(`Voice Assistant: Command executed: ${phrase} (${(confidence * 100).toFixed(1)}%)`);
+        
+        if (this._settings.get_boolean('notification-enabled')) {
+            this._showNotification(
+                'Command Executed',
+                `${phrase} (${(confidence * 100).toFixed(1)}% confidence)`,
+                MessageTray.Urgency.NORMAL
+            );
+        }
+    }
+    
+    _onStatusChanged(status) {
+        if (status.is_running !== undefined) {
+            this._isRunning = status.is_running.unpack();
+        }
+        if (status.current_mode !== undefined) {
+            this._currentMode = status.current_mode.unpack();
+        }
+        if (status.current_buffer !== undefined) {
+            this._currentBuffer = status.current_buffer.unpack();
+        }
         
         this._updateDisplay();
     }
     
-    _processBuffer(text) {
-        if (!text || text.trim() === '') {
-            return;
-        }
-        
-        // Clear any existing processing timer before setting a new one
-        this._clearProcessingTimer();
-        this._clearBufferClearTimer();
-        
-        const mode = this._currentMode;
-        console.log(`Voice Assistant: Processing "${text}" in ${mode} mode`);
-        
-        if (mode === 'normal') {
-            this._processNormalMode(text);
-        } else if (mode === 'command') {
-            this._processCommandMode(text);
-        } else if (mode === 'typing') {
-            this._processTypingMode(text);
-        }
+    _onError(message, details) {
+        console.error('Voice Assistant:', message, details);
+        this._showNotification('Error', message, MessageTray.Urgency.HIGH);
     }
     
-    _processNormalMode(text) {
-        // Look for hotword
-        const hotword = this._config.hotword || 'hey';
-        const words = text.toLowerCase().split(/\s+/);
-        const hotwordRatio = this._getBestWordMatch(words, hotword.toLowerCase());
+    _onNotification(title, message, urgency) {
+        if (!this._settings.get_boolean('notification-enabled')) return;
         
-        console.log(`Voice Assistant: Hotword "${hotword}" confidence: ${hotwordRatio}%`);
+        const urgencyLevel = urgency === 'high' ? MessageTray.Urgency.HIGH :
+                           urgency === 'low' ? MessageTray.Urgency.LOW :
+                           MessageTray.Urgency.NORMAL;
         
-        if (hotwordRatio >= (this._config.command_threshold || 80)) {
-            console.log(`Voice Assistant: Hotword detected, switching to command mode`);
-            this._setMode('command');
-            return;
-        }
-        
-        // Clear buffer if it gets too long in normal mode
-        if (words.length > 10) {
-            console.log(`Voice Assistant: Buffer too long in normal mode (${words.length} words), scheduling clear`);
-            this._scheduleBufferClear(2000); // Clear after 2 seconds
-        }
+        this._showNotification(title, message, urgencyLevel);
     }
     
-    _processCommandMode(text) {
-        // Wait for the processing interval before checking commands
-        const interval = (this._config.processing_interval || 1.5) * 1000;
-        
-        // Only set timer if one isn't already running for this text
-        if (!this._processingTimer) {
-            this._processingTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, () => {
-                this._executeCommandProcessing(text);
-                this._processingTimer = null;
-                return GLib.SOURCE_REMOVE;
-            });
-            
-            console.log(`Voice Assistant: Scheduled command processing in ${interval}ms`);
-        } else {
-            console.log(`Voice Assistant: Processing timer already running, skipping`);
-        }
-    }
-    
-    _executeCommandProcessing(text) {
-        console.log(`Voice Assistant: Executing command processing for: "${text}"`);
-        
-        // Check for mode change commands first
-        const modeSwitches = {
-            'typing mode': 'typing',
-            'go to typing mode': 'typing', 
-            'start typing': 'typing',
-            'normal mode': 'normal',
-            'go to normal mode': 'normal',
-            'stop typing': 'normal',
-            'exit typing': 'normal',
-            'cancel': 'normal',
-            'stop': 'normal',
-            'nevermind': 'normal'
-        };
-        
-        for (const [phrase, targetMode] of Object.entries(modeSwitches)) {
-            const ratio = this._getTextSimilarity(text.toLowerCase(), phrase);
-            if (ratio >= (this._config.command_threshold || 80)) {
-                console.log(`Voice Assistant: Mode switch command detected (${ratio}%): ${phrase} -> ${targetMode}`);
-                this._setMode(targetMode);
-                return;
-            }
-        }
-        
-        // Find best command match
-        const [bestMatch, bestRatio] = this._findBestCommandMatch(text);
-        
-        if (bestMatch && bestRatio >= (this._config.command_threshold || 80)) {
-            console.log(`Voice Assistant: Executing command (${bestRatio}%): "${bestMatch}"`);
-            
-            // Track the executed text and timestamp to prevent duplicate execution
-            this._lastExecutedText = text.toLowerCase();
-            this._lastCommandTime = Date.now();
-            
-            // Execute the command
-            this._executeCommand(this._commands[bestMatch]);
-        } else {
-            console.log(`Voice Assistant: No matching command found (best: ${bestRatio}%)`);
-            
-            // Schedule buffer clear after another interval if no commands match
-            const clearInterval = (this._config.processing_interval || 1.5) * 1000;
-            this._scheduleBufferClear(clearInterval);
-        }
-    }
-    
-    _processTypingMode(text) {
-        // In typing mode, check for exit commands
-        const exitPhrases = ['stop typing', 'exit typing', 'normal mode', 'go to normal mode'];
-        
-        for (const phrase of exitPhrases) {
-            if (text.toLowerCase().includes(phrase)) {
-                console.log(`Voice Assistant: Exit phrase detected in typing mode: ${phrase}`);
-                this._setMode('normal');
-                return;
-            }
-        }
-        
-        // For typing mode, we simulate keyboard input
-        this._typeText(text);
-    }
-    
-    _findBestCommandMatch(text) {
-        let bestMatch = null;
-        let bestRatio = 0;
-        
-        const textLower = text.toLowerCase();
-        
-        for (const phrase of this._allPhrases) {
-            const ratio = this._getTextSimilarity(textLower, phrase);
-            if (ratio > bestRatio) {
-                bestRatio = ratio;
-                bestMatch = phrase;
-            }
-        }
-        
-        return [bestMatch, bestRatio];
-    }
-    
-    _getBestWordMatch(words, target) {
-        let bestRatio = 0;
-        
-        // Check for exact match
-        if (words.includes(target)) {
-            return 100;
-        }
-        
-        // Check similarity with each word
-        for (const word of words) {
-            const ratio = this._getTextSimilarity(word, target);
-            if (ratio > bestRatio) {
-                bestRatio = ratio;
-            }
-        }
-        
-        return bestRatio;
-    }
-    
-    _getTextSimilarity(str1, str2) {
-        // Simple similarity calculation (Levenshtein-based)
-        if (str1 === str2) return 100;
-        
-        const len1 = str1.length;
-        const len2 = str2.length;
-        
-        if (len1 === 0) return len2 === 0 ? 100 : 0;
-        if (len2 === 0) return 0;
-        
-        const matrix = Array(len1 + 1).fill(null).map(() => Array(len2 + 1).fill(null));
-        
-        for (let i = 0; i <= len1; i++) matrix[i][0] = i;
-        for (let j = 0; j <= len2; j++) matrix[0][j] = j;
-        
-        for (let i = 1; i <= len1; i++) {
-            for (let j = 1; j <= len2; j++) {
-                const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
-                matrix[i][j] = Math.min(
-                    matrix[i - 1][j] + 1,      // deletion
-                    matrix[i][j - 1] + 1,      // insertion
-                    matrix[i - 1][j - 1] + cost // substitution
-                );
-            }
-        }
-        
-        const maxLen = Math.max(len1, len2);
-        const distance = matrix[len1][len2];
-        return Math.max(0, ((maxLen - distance) / maxLen) * 100);
-    }
-    
-    _hashText(text) {
-        let hash = 0;
-        for (let i = 0; i < text.length; i++) {
-            const char = text.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // Convert to 32bit integer
-        }
-        return hash;
-    }
-    
-    _executeCommand(command) {
-        try {
-            console.log(`Voice Assistant: Executing command: ${command}`);
-            
-            // Show notification for command execution
-            this._showNotification('Command Executed', `Running: ${command}`);
-            
-            // Use command executor script if available
-            const scriptPath = GLib.get_home_dir() + '/.config/nerd-dictation/command_executor.sh';
-            const scriptFile = Gio.File.new_for_path(scriptPath);
-            
-            if (scriptFile.query_exists(null)) {
-                GLib.spawn_command_line_async(`${scriptPath} "${command}"`);
-                console.log(`Voice Assistant: Command executed via script: ${command}`);
-            } else {
-                // Fallback to direct execution
-                GLib.spawn_command_line_async(command);
-                console.log(`Voice Assistant: Command executed directly: ${command}`);
-            }
-            
-            // Clear buffer after successful command execution
-            this._clearBuffer();
-            
-        } catch (e) {
-            console.log(`Voice Assistant: Error executing command "${command}": ${e}`);
-            this._showNotification('Command Error', `Failed to execute: ${command}`);
-        }
-    }
-    
-    _typeText(text) {
-        try {
-            // Handle incremental typing for typing mode
-            if (!this._lastTypingText) {
-                this._lastTypingText = '';
-            }
-            
-            // If text is shorter than last time, it's a reset
-            if (text.length < this._lastTypingText.length) {
-                this._lastTypingText = text;
-                this._simulateTyping(text);
-                return;
-            }
-            
-            // Extract only the new portion
-            const newText = text.substring(this._lastTypingText.length);
-            if (newText) {
-                this._lastTypingText = text;
-                this._simulateTyping(newText);
-            }
-            
-        } catch (e) {
-            console.log(`Voice Assistant: Error typing text: ${e}`);
-        }
-    }
-    
-    _simulateTyping(text) {
-        try {
-            // Use ydotool to simulate typing
-            const command = `ydotool type "${text.replace(/"/g, '\\\\"')}"`;
-            GLib.spawn_command_line_async(command);
-            console.log(`Voice Assistant: Typed: "${text}"`);
-        } catch (e) {
-            console.log(`Voice Assistant: Error simulating typing: ${e}`);
-        }
-    }
-    
-    _clearProcessingTimer() {
-        if (this._processingTimer) {
-            GLib.source_remove(this._processingTimer);
-            this._processingTimer = null;
-        }
-    }
-    
-    _clearBufferClearTimer() {
-        if (this._bufferClearTimer) {
-            GLib.source_remove(this._bufferClearTimer);
-            this._bufferClearTimer = null;
-        }
-    }
-    
-    _clearBufferTimeoutTimer() {
-        if (this._bufferTimeoutTimer) {
-            GLib.source_remove(this._bufferTimeoutTimer);
-            this._bufferTimeoutTimer = null;
-        }
-    }
-    
-    _clearDebounceTimer() {
-        if (this._debounceTimer) {
-            GLib.source_remove(this._debounceTimer);
-            this._debounceTimer = null;
-        }
-    }
-    
-    _scheduleBufferClear(delay) {
-        this._clearBufferClearTimer();
-        
-        this._bufferClearTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
-            console.log('Voice Assistant: Scheduled buffer clear triggered');
-            this._suspendResumeForBufferClear();
-            this._bufferClearTimer = null;
-            return GLib.SOURCE_REMOVE;
-        });
-    }
-    
-    _clearBuffer() {
-        try {
-            // Clear any pending processing timers when buffer is cleared
-            this._clearProcessingTimer();
-            this._clearBufferClearTimer();
-            this._clearDebounceTimer();
-            
-            const bufferFile = Gio.File.new_for_path('/tmp/nerd-dictation.buffer');
-            if (bufferFile.query_exists(null)) {
-                bufferFile.replace_contents('', null, false, Gio.FileCreateFlags.NONE, null);
-            }
-            this._currentBuffer = '';
-            this._updateDisplay();
-        } catch (e) {
-            console.log(`Voice Assistant: Error clearing buffer: ${e}`);
-        }
-    }
+    // UI updates
     
     _updateDisplay() {
-        // Update icon and style based on mode
-        let iconName = 'radio-symbolic';
-        let styleClass = 'system-status-icon';
+        // Update icon based on mode
+        let iconName = 'microphone-sensitivity-medium-symbolic';
+        let iconStyle = '';
         
-        switch (this._currentMode) {
-            case 'command':
-                iconName = 'applications-system-symbolic';
-                styleClass += ' voice-assistant-command';
-                break;
-            case 'typing':
-                iconName = 'edit-symbolic';
-                styleClass += ' voice-assistant-typing';
-                break;
-            default:
-                iconName = 'radio-symbolic';
-                styleClass += ' voice-assistant-normal';
-                break;
+        if (!this._isRunning) {
+            iconName = 'microphone-disabled-symbolic';
+        } else if (this._currentMode === 'command') {
+            iconName = 'microphone-sensitivity-high-symbolic';
+            iconStyle = 'color: #ff4444;'; // Red for command mode
+        } else if (this._currentMode === 'typing') {
+            iconName = 'input-keyboard-symbolic';
         }
         
         this._icon.icon_name = iconName;
-        this._icon.style_class = styleClass;
+        if (iconStyle) {
+            this._icon.style = iconStyle;
+        } else {
+            this._icon.style = '';
+        }
         
-        // Update buffer text display
-        this._updateBufferDisplay();
+        // Update buffer text
+        const maxBufferLength = 50;
+        let bufferText = this._currentBuffer;
+        if (bufferText.length > maxBufferLength) {
+            bufferText = '...' + bufferText.substring(bufferText.length - maxBufferLength);
+        }
+        this._bufferLabel.text = bufferText ? ` ${bufferText}` : '';
         
-        // Update menu
+        // Update menu items
         if (this._modeItem) {
             this._modeItem.label.text = `Mode: ${this._currentMode.toUpperCase()}`;
         }
         
-        // Update button sensitivity
-        if (this._normalModeItem) this._normalModeItem.setSensitive(this._currentMode !== 'normal');
-        if (this._commandModeItem) this._commandModeItem.setSensitive(this._currentMode !== 'command');
-        if (this._typingModeItem) this._typingModeItem.setSensitive(this._currentMode !== 'typing');
-        
-        // Update status
-        if (this._statusItem) {
-            let statusText = `Voice Assistant: ${this._currentMode} mode active`;
-            if (this._processingTimer) {
-                statusText += ' (processing...)';
-            }
-            this._statusItem.label.text = statusText;
-        }
-        
-        // Update buffer item
         if (this._bufferItem) {
-            if (this._currentBuffer && this._currentBuffer.length > 0) {
-                let bufferText = this._currentBuffer;
-                const maxLength = 50;
-                if (bufferText.length > maxLength) {
-                    bufferText = bufferText.substring(0, maxLength) + '...';
-                }
-                this._bufferItem.label.text = `Buffer: "${bufferText}"`;
-            } else {
-                this._bufferItem.label.text = 'Buffer: (empty)';
-            }
+            this._bufferItem.label.text = this._currentBuffer 
+                ? `Buffer: ${this._currentBuffer}` 
+                : 'Buffer: (empty)';
         }
         
-        // Update timing info
-        if (this._timingItem) {
-            if (this._lastBufferUpdate > 0) {
-                const elapsed = Math.floor((Date.now() - this._lastBufferUpdate) / 1000);
-                this._timingItem.label.text = `Last input: ${elapsed}s ago`;
-            } else {
-                this._timingItem.label.text = 'Last input: never';
-            }
+        if (this._serviceStatusItem) {
+            this._serviceStatusItem.label.text = this._isRunning 
+                ? 'Service: Running' 
+                : 'Service: Stopped';
         }
+        
+        // Update menu button sensitivity
+        if (this._startItem) this._startItem.setSensitive(!this._isRunning);
+        if (this._stopItem) this._stopItem.setSensitive(this._isRunning);
+        if (this._restartItem) this._restartItem.setSensitive(this._isRunning);
     }
-
-    _updateControlStatus() {
-        try {
-            // Check if nerd-dictation is running
-            this._isNerdDictationRunning((isRunning) => {
-                if (this._controlItem) {
-                    this._controlItem.label.text = isRunning ? 
-                        'Voice Assistant: Running' : 
-                        'Voice Assistant: Stopped';
-                }
-                
-                // Show/hide appropriate control items based on running status
-                if (this._startItem) {
-                    this._startItem.visible = !isRunning;
-                }
-                
-                if (this._stopItem) {
-                    this._stopItem.visible = isRunning;
-                }
-                
-                // Update mode controls sensitivity based on running status
-                const modeControlsEnabled = isRunning;
-                if (this._normalModeItem) this._normalModeItem.setSensitive(modeControlsEnabled && this._currentMode !== 'normal');
-                if (this._commandModeItem) this._commandModeItem.setSensitive(modeControlsEnabled && this._currentMode !== 'command');
-                if (this._typingModeItem) this._typingModeItem.setSensitive(modeControlsEnabled && this._currentMode !== 'typing');
+    
+    _showNotification(title, message, urgency) {
+        if (!this._notificationSource) {
+            this._notificationSource = new MessageTray.Source({
+                title: 'Voice Assistant',
+                iconName: 'microphone-sensitivity-medium-symbolic'
             });
-        } catch (e) {
-            console.log(`Voice Assistant: Error updating control status: ${e}`);
+            Main.messageTray.add(this._notificationSource);
         }
-    }
-
-    _isNerdDictationRunning(callback) {
-        try {
-            // Check status file first
-            const statusFile = Gio.File.new_for_path('/tmp/nerd-dictation.status');
-            if (statusFile.query_exists(null)) {
-                callback(true);
-                return;
-            }
-            
-            // Fallback: check for running process synchronously (use specific pattern)
-            try {
-                const [success, stdout] = GLib.spawn_command_line_sync('pgrep -f "nerd-dictation begin"');
-                const isRunning = success && stdout.length > 0;
-                callback(isRunning);
-            } catch (e) {
-                callback(false);
-            }
-        } catch (e) {
-            callback(false);
-        }
-    }
-
-    _startNerdDictation() {
-        try {
-            const scriptPath = GLib.get_home_dir() + '/.config/nerd-dictation/start-nerd.sh';
-            const scriptFile = Gio.File.new_for_path(scriptPath);
-            
-            if (scriptFile.query_exists(null)) {
-                console.log('Voice Assistant: Starting nerd-dictation via script');
-                GLib.spawn_command_line_async(`${scriptPath}`);
-                
-                // Update status after a delay
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
-                    this._updateControlStatus();
-                    return GLib.SOURCE_REMOVE;
-                });
-            } else {
-                console.log('Voice Assistant: start-nerd.sh script not found');
-                this._showNotification('Error', 'Start script not found at ' + scriptPath);
-            }
-        } catch (e) {
-            console.log(`Voice Assistant: Error starting nerd-dictation: ${e}`);
-            this._showNotification('Error', 'Failed to start voice assistant');
-        }
-    }
-
-    _stopNerdDictation() {
-        try {
-            const scriptPath = GLib.get_home_dir() + '/.config/nerd-dictation/stop-nerd.sh';
-            const scriptFile = Gio.File.new_for_path(scriptPath);
-            
-            if (scriptFile.query_exists(null)) {
-                console.log('Voice Assistant: Stopping nerd-dictation via script');
-                GLib.spawn_command_line_async(`${scriptPath}`);
-                
-                // Update status after a delay
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
-                    this._updateControlStatus();
-                    return GLib.SOURCE_REMOVE;
-                });
-            } else {
-                console.log('Voice Assistant: stop-nerd.sh script not found');
-                this._showNotification('Error', 'Stop script not found at ' + scriptPath);
-            }
-        } catch (e) {
-            console.log(`Voice Assistant: Error stopping nerd-dictation: ${e}`);
-            this._showNotification('Error', 'Failed to stop voice assistant');
-        }
-    }
-
-    _showNotification(title, message) {
-        try {
-            // Check if notifications are enabled in settings
-            if (!this._settings.get_boolean('notification-enabled')) {
-                return;
-            }
-            
-            // Use notify-send for system notifications
-            const command = ['notify-send', '--app-name=Voice Assistant', `--icon=audio-input-microphone-symbolic`, title, message];
-            GLib.spawn_async(null, command, null, GLib.SpawnFlags.SEARCH_PATH, null);
-            console.log(`Voice Assistant: Notification sent - ${title}: ${message}`);
-        } catch (e) {
-            console.log(`Voice Assistant: Notification error: ${e}`);
-        }
-    }
-    
-    _updateBufferDisplay() {
-        if (!this._bufferLabel) return;
         
-        // Only show buffer text in command mode
-        if (this._currentMode === 'command' && this._currentBuffer && this._currentBuffer.length > 0) {
-            let displayText = this._currentBuffer;
-            const maxLength = 25;
-            
-            if (displayText.length > maxLength) {
-                displayText = displayText.substring(0, maxLength) + '...';
-            }
-            
-            this._bufferLabel.text = displayText;
-            this._bufferLabel.visible = true;
-        } else {
-            this._bufferLabel.text = '';
-            this._bufferLabel.visible = false;
-        }
-    }
-    
-    _setMode(mode) {
-        try {
-            // Use the mode_changer.sh script if available for suspend/resume functionality
-            const scriptPath = GLib.get_home_dir() + '/.config/nerd-dictation/mode_changer.sh';
-            const scriptFile = Gio.File.new_for_path(scriptPath);
-            
-            if (scriptFile.query_exists(null)) {
-                GLib.spawn_command_line_async(`${scriptPath} ${mode}`);
-                console.log(`Voice Assistant: Mode change requested via script: ${mode}`);
-            } else {
-                // Fallback to direct mode change
-                let file = Gio.File.new_for_path('/tmp/nerd-dictation.mode');
-                file.replace_contents(mode, null, false, Gio.FileCreateFlags.NONE, null);
-                console.log(`Voice Assistant: Mode set directly to ${mode}`);
-            }
-        } catch (e) {
-            console.log(`Voice Assistant: Error setting mode: ${e}`);
-        }
-    }
-    
-    _suspendResumeForBufferClear() {
-        try {
-            const scriptPath = GLib.get_home_dir() + '/.config/nerd-dictation/command_executor.sh';
-            const scriptFile = Gio.File.new_for_path(scriptPath);
-            
-            if (scriptFile.query_exists(null)) {
-                GLib.spawn_command_line_async(`${scriptPath} echo "Buffer cleared"`);
-                console.log('Voice Assistant: Triggered suspend/resume cycle to clear buffer');
-            } else {
-                console.log('Voice Assistant: command_executor.sh not found, cannot clear buffer');
-            }
-        } catch (e) {
-            console.log(`Voice Assistant: Error triggering buffer clear: ${e}`);
-        }
+        const notification = new MessageTray.Notification({
+            source: this._notificationSource,
+            title: title,
+            body: message,
+            urgency: urgency
+        });
+        
+        this._notificationSource.addNotification(notification);
     }
     
     destroy() {
         // Clean up timers
-        this._clearProcessingTimer();
-        this._clearBufferClearTimer();
-        this._clearBufferTimeoutTimer();
-        this._clearDebounceTimer();
-        
         if (this._statusTimer) {
             GLib.source_remove(this._statusTimer);
             this._statusTimer = null;
         }
         
-        // Clean up file monitors
-        if (this._modeMonitor) {
-            this._modeMonitor.cancel();
-            this._modeMonitor = null;
-        }
-        if (this._bufferMonitor) {
-            this._bufferMonitor.cancel();
-            this._bufferMonitor = null;
+        // Clean up D-Bus proxy
+        if (this._proxy) {
+            this._proxy = null;
         }
         
         super.destroy();
     }
 });
 
-export default class VoiceAssistantExtension {
-    enable() {
-        console.log('Voice Assistant extension enabling...');
-        try {
-            this._indicator = new VoiceAssistantIndicator();
-            Main.panel.addToStatusArea('voice-assistant', this._indicator);
-            console.log('Voice Assistant extension enabled successfully');
-        } catch (e) {
-            console.log(`Voice Assistant extension failed to enable: ${e}`);
-        }
+export default class VoiceAssistantExtension extends Extension {
+    constructor(metadata) {
+        super(metadata);
+        this._indicator = null;
     }
-    
+
+    enable() {
+        console.log('Voice Assistant: Enabling extension');
+        const settings = this.getSettings();
+        this._indicator = new VoiceAssistantIndicator(settings);
+        Main.panel.addToStatusArea('voice-assistant', this._indicator);
+    }
+
     disable() {
-        console.log('Voice Assistant extension disabling...');
+        console.log('Voice Assistant: Disabling extension');
         if (this._indicator) {
             this._indicator.destroy();
             this._indicator = null;
         }
-        console.log('Voice Assistant extension disabled');
     }
 }

@@ -225,6 +225,17 @@
         "open facebook",
         "facebook"
       ]
+    },
+    {
+      "name": "Exit Command Mode",
+      "command": "exit_command_mode",
+      "phrases": [
+        "exit",
+        "cancel",
+        "stop listening",
+        "normal mode",
+        "go back"
+      ]
     }
   ],
   "typing_mode": {

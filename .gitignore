@@ -1,3 +1,42 @@
+# Old model directories
 bak
 model
-__pycache__
+
+# Build artifacts
+service/build/
+whisper.cpp/
+*.o
+*.so
+*.a
+*.dylib
+
+# Model files (downloaded during build)
+*.bin
+
+# Backup files
+*.old
+*.backup
+*.bak
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Compiled extension schemas
+gnome-extension/**/gschemas.compiled
