@@ -64,6 +64,9 @@ const VoiceAssistantIface = `
       <arg name="message" type="s"/>
       <arg name="urgency" type="s"/>
     </signal>
+    <signal name="ConfigChanged">
+      <arg name="config" type="s"/>
+    </signal>
     <property name="IsRunning" type="b" access="read"/>
     <property name="CurrentMode" type="s" access="read"/>
     <property name="CurrentBuffer" type="s" access="read"/>

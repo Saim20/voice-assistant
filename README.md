@@ -142,7 +142,10 @@ systemctl --user status gnome-assistant.service
    - **Hotword**: Activation word (default: "hey")
    - **Command Threshold**: Minimum confidence for execution (50-100%)
    - **Processing Interval**: Wait time before processing speech
+   - **GPU Acceleration**: Enable GPU-accelerated inference (requires GPU support)
    - **Commands**: Add/edit voice commands
+
+**Note**: Configuration changes are applied immediately via D-Bus without requiring a service restart. GPU acceleration changes will trigger an automatic whisper model reload.
 
 ### Via Config File
 

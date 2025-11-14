@@ -24,5 +24,10 @@
       <summary>Activation hotword</summary>
       <description>The word used to activate command mode from normal mode</description>
     </key>
+    <key name="gpu-acceleration" type="b">
+      <default>false</default>
+      <summary>GPU acceleration</summary>
+      <description>Enable GPU acceleration for whisper.cpp inference (requires GPU support)</description>
+    </key>
   </schema>
 </schemalist>

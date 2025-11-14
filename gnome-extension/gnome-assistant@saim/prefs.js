@@ -73,6 +73,13 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
             recognitionGroup
         );
 
+        this._prefsBuilder.createSwitchRow(
+            'GPU Acceleration',
+            'Enable GPU acceleration for whisper.cpp (requires GPU support and service restart)',
+            'gpu-acceleration',
+            recognitionGroup
+        );
+
         page.add(recognitionGroup);
 
         // Interface Settings group

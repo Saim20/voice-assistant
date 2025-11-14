@@ -25,6 +25,7 @@ VoiceAssistantService::VoiceAssistantService(sdbus::IConnection& connection, std
     , m_commandThreshold(0.8)
     , m_processingInterval(1.5)
     , m_whisperModel("ggml-tiny.en.bin")
+    , m_gpuAcceleration(false)
     , m_typingExitPhrases({"stop typing", "exit typing", "normal mode", "go to normal mode"})
     , m_stopAudioThread(false)
     , m_pulseAudio(nullptr)
@@ -194,8 +195,27 @@ void VoiceAssistantService::UpdateConfig(const std::string& configJson) {
     std::istringstream stream(configJson);
     
     if (Json::parseFromStream(reader, stream, &root, &errs)) {
+        // Store old GPU setting to detect changes
+        bool oldGpuSetting = m_gpuAcceleration;
+        std::string oldModel = m_whisperModel;
+        
         jsonToConfig(root);
         saveConfig();
+        
+        // Reload whisper if GPU setting or model changed
+        if (oldGpuSetting != m_gpuAcceleration || oldModel != m_whisperModel) {
+            log("INFO", "GPU acceleration or model changed, reloading whisper...");
+            shutdownWhisper();
+            const char* home = std::getenv("HOME");
+            std::string modelPath = std::string(home) + "/.local/share/voice-assistant/models";
+            if (!initializeWhisper(modelPath)) {
+                log("ERROR", "Failed to reload Whisper model");
+                emitError("Reload Error", "Failed to reload Whisper model with new settings");
+            }
+        }
+        
+        // Emit config changed signal
+        emitConfigChanged(configJson);
         log("INFO", "Configuration updated via D-Bus");
     } else {
         emitError("Configuration Error", "Failed to parse JSON: " + errs);
@@ -204,6 +224,8 @@ void VoiceAssistantService::UpdateConfig(const std::string& configJson) {
 
 void VoiceAssistantService::SetConfigValue(const std::string& key, const sdbus::Variant& value) {
     std::lock_guard<std::mutex> lock(m_configMutex);
+    
+    bool reloadWhisper = false;
     
     if (key == "hotword") {
         m_hotword = value.get<std::string>();
@@ -214,10 +236,29 @@ void VoiceAssistantService::SetConfigValue(const std::string& key, const sdbus::
     } else if (key == "whisper_model") {
         m_whisperModel = value.get<std::string>();
         log("INFO", "Whisper model changed to: " + m_whisperModel);
-        // Note: Service needs restart to reload the new model
+        reloadWhisper = true;
+    } else if (key == "gpu_acceleration") {
+        m_gpuAcceleration = value.get<bool>();
+        log("INFO", "GPU acceleration changed to: " + std::string(m_gpuAcceleration ? "enabled" : "disabled"));
+        reloadWhisper = true;
     }
     
     saveConfig();
+    
+    // Reload whisper if needed (release lock first to avoid deadlock)
+    if (reloadWhisper) {
+        m_configMutex.unlock();
+        log("INFO", "Reloading whisper with new settings...");
+        shutdownWhisper();
+        const char* home = std::getenv("HOME");
+        std::string modelPath = std::string(home) + "/.local/share/voice-assistant/models";
+        if (!initializeWhisper(modelPath)) {
+            log("ERROR", "Failed to reload Whisper model");
+            emitError("Reload Error", "Failed to reload Whisper model with new settings");
+        }
+        m_configMutex.lock();
+    }
+    
     log("INFO", "Config value updated: " + key);
 }
 
@@ -357,6 +398,11 @@ void VoiceAssistantService::emitNotification(const std::string& title,
         .withArguments(title, message, urgency);
 }
 
+void VoiceAssistantService::emitConfigChanged(const std::string& config) {
+    m_object->emitSignal("ConfigChanged").onInterface("com.github.saim.GnomeAssistant")
+        .withArguments(config);
+}
+
 // Whisper integration
 
 bool VoiceAssistantService::initializeWhisper(const std::string& modelPath) {
@@ -365,14 +411,15 @@ bool VoiceAssistantService::initializeWhisper(const std::string& modelPath) {
     // Use configured model, or default to tiny.en
     std::string modelFile = modelPath + "/" + m_whisperModel;
     
-    // Initialize whisper context with GPU support
+    // Initialize whisper context with GPU support based on configuration
     whisper_context_params cparams = whisper_context_default_params();
     
-    // Enable GPU acceleration - whisper.cpp will automatically use CUDA or Vulkan if available
-    cparams.use_gpu = true;
+    // Use configured GPU acceleration setting
+    cparams.use_gpu = m_gpuAcceleration;
     cparams.gpu_device = 0;  // Use first GPU device
     
-    log("INFO", "Attempting to initialize Whisper with GPU acceleration...");
+    log("INFO", "Attempting to initialize Whisper with GPU acceleration: " + 
+        std::string(m_gpuAcceleration ? "enabled" : "disabled"));
     m_whisperCtx = whisper_init_from_file_with_params(modelFile.c_str(), cparams);
     
     if (!m_whisperCtx) {
@@ -785,6 +832,7 @@ Json::Value VoiceAssistantService::configToJson() const {
     root["command_threshold"] = m_commandThreshold;
     root["processing_interval"] = m_processingInterval;
     root["whisper_model"] = m_whisperModel;
+    root["gpu_acceleration"] = m_gpuAcceleration;
     
     Json::Value logging;
     logging["level"] = "INFO";
@@ -827,6 +875,11 @@ void VoiceAssistantService::jsonToConfig(const Json::Value& json) {
     if (json.isMember("whisper_model")) {
         m_whisperModel = json["whisper_model"].asString();
         log("INFO", "Whisper model configured: " + m_whisperModel);
+    }
+    
+    if (json.isMember("gpu_acceleration")) {
+        m_gpuAcceleration = json["gpu_acceleration"].asBool();
+        log("INFO", "GPU acceleration configured: " + std::string(m_gpuAcceleration ? "enabled" : "disabled"));
     }
     
     // Load typing mode exit phrases

@@ -8,6 +8,9 @@
   "_comment_interval": "Seconds to wait before processing speech (0.5-5.0)",
   "processing_interval": 1.5,
   
+  "_comment_gpu": "Enable GPU acceleration for whisper.cpp inference (requires GPU support)",
+  "gpu_acceleration": false,
+  
   "_comment_logging": "Logging configuration",
   "logging": {
     "level": "INFO",

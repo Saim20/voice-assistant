@@ -40,3 +40,5 @@ __pycache__/
 
 # Compiled extension schemas
 gnome-extension/**/gschemas.compiled
+
+build/

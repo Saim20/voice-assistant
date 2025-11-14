@@ -63,6 +63,7 @@ public:
     void emitStatusChanged(const std::map<std::string, sdbus::Variant>& status);
     void emitError(const std::string& message, const std::string& details);
     void emitNotification(const std::string& title, const std::string& message, const std::string& urgency);
+    void emitConfigChanged(const std::string& config);
 
     // D-Bus Properties
     bool IsRunning() const { return m_isRunning; }
@@ -129,6 +130,7 @@ private:
     double m_commandThreshold;
     double m_processingInterval;
     std::string m_whisperModel;
+    bool m_gpuAcceleration;
     std::vector<std::string> m_typingExitPhrases;
     std::string m_configPath;
     mutable std::mutex m_configMutex;

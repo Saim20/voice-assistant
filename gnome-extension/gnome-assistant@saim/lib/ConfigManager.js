@@ -7,12 +7,63 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
+const VoiceAssistantIface = `
+  <node>
+  <interface name="com.github.saim.GnomeAssistant">
+    <method name="UpdateConfig">
+      <arg direction="in" type="s" name="config"/>
+    </method>
+  </interface>
+  </node>
+`;
+
+const VoiceAssistantProxy = Gio.DBusProxy.makeProxyWrapper(VoiceAssistantIface);
+
 export class ConfigManager {
     constructor(settings) {
         this._settings = settings;
         this._configPath = GLib.get_home_dir() + '/.config/gnome-assistant/config.json';
         this._configFile = Gio.File.new_for_path(this._configPath);
         this._config = null;
+        this._proxy = null;
+        this._initDbusProxy();
+    }
+
+    /**
+     * Initialize D-Bus proxy for live updates
+     */
+    _initDbusProxy() {
+        try {
+            this._proxy = new VoiceAssistantProxy(
+                Gio.DBus.session,
+                'com.github.saim.GnomeAssistant',
+                '/com/github/saim/GnomeAssistant'
+            );
+        } catch (e) {
+            console.log(`ConfigManager: Could not connect to D-Bus service: ${e}`);
+        }
+    }
+
+    /**
+     * Notify D-Bus service of config changes
+     */
+    _notifyServiceConfigChanged(config) {
+        if (!this._proxy) {
+            return;
+        }
+        
+        try {
+            const configJson = JSON.stringify(config);
+            this._proxy.UpdateConfigRemote(configJson, (result, error) => {
+                if (error) {
+                    console.log(`ConfigManager: Failed to notify service of config change: ${error}`);
+                } else {
+                    console.log('ConfigManager: Service notified of config change');
+                }
+            });
+        } catch (e) {
+            console.log(`ConfigManager: Error notifying service: ${e}`);
+        }
     }
 
     /**
@@ -66,6 +117,10 @@ export class ConfigManager {
             const configJson = JSON.stringify(mergedConfig, null, 2);
             this._configFile.replace_contents(configJson, null, false, Gio.FileCreateFlags.NONE, null);
             this._config = config; // Store the clean version internally
+            
+            // Notify D-Bus service of config change
+            this._notifyServiceConfigChanged(config);
+            
             return true;
         } catch (e) {
             console.log(`ConfigManager: Error saving config: ${e}`);
@@ -102,6 +157,7 @@ export class ConfigManager {
         config.hotword = this._settings.get_string('hotword');
         config.command_threshold = this._settings.get_int('command-threshold');
         config.processing_interval = this._settings.get_double('processing-interval');
+        config.gpu_acceleration = this._settings.get_boolean('gpu-acceleration');
 
         return this.saveConfig(config);
     }
@@ -115,6 +171,7 @@ export class ConfigManager {
         this._settings.set_string('hotword', config.hotword || 'hey');
         this._settings.set_int('command-threshold', config.command_threshold || 80);
         this._settings.set_double('processing-interval', config.processing_interval || 1.5);
+        this._settings.set_boolean('gpu-acceleration', config.gpu_acceleration || false);
     }
 
     /**
@@ -178,6 +235,7 @@ export class ConfigManager {
             "hotword": "hey",
             "command_threshold": 80,
             "processing_interval": 1.5,
+            "gpu_acceleration": false,
             "logging": {
                 "level": "INFO",
                 "file": "/tmp/voice_assistant.log"
