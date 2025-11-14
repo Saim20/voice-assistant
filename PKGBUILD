@@ -1,0 +1,167 @@
+# Maintainer: Saim <saim20@example.com>
+pkgname=gnome-assistant
+pkgver=2.0.0
+pkgrel=1
+pkgdesc="Advanced voice control for GNOME Shell with whisper.cpp offline speech recognition"
+arch=('x86_64')
+url="https://github.com/Saim20/gnome-assistant"
+license=('MIT')
+depends=(
+    'gnome-shell>=45'
+    'sdbus-cpp'
+    'jsoncpp'
+    'libpulse'
+    'ydotool'
+)
+makedepends=(
+    'cmake'
+    'git'
+    'gcc'
+)
+optdepends=(
+    'cuda: for NVIDIA GPU acceleration'
+    'vulkan-icd-loader: for Vulkan GPU acceleration (AMD/Intel/NVIDIA)'
+    'vulkan-headers: for Vulkan GPU acceleration build support'
+)
+install=gnome-assistant.install
+source=("gnome-assistant::git+https://github.com/Saim20/gnome-assistant.git")
+sha256sums=('SKIP')
+
+# Build options - users can enable these before building
+# To enable CUDA: export ENABLE_CUDA=1 before running makepkg
+# To enable Vulkan: export ENABLE_VULKAN=1 before running makepkg
+# Or edit this file and set _enable_cuda=1 or _enable_vulkan=1
+: ${ENABLE_CUDA:=0}
+: ${ENABLE_VULKAN:=0}
+_enable_cuda=${ENABLE_CUDA}
+_enable_vulkan=${ENABLE_VULKAN}
+
+prepare() {
+    cd "$srcdir/$pkgname"
+    
+    # Clone whisper.cpp if not present
+    if [ ! -d "whisper.cpp" ]; then
+        msg2 "Cloning whisper.cpp..."
+        git clone https://github.com/ggerganov/whisper.cpp.git whisper.cpp
+    fi
+    
+    # Display build configuration
+    msg2 "==================================================================="
+    msg2 "Build configuration:"
+    msg2 "  CUDA support: $([ $_enable_cuda -eq 1 ] && echo 'enabled' || echo 'disabled')"
+    msg2 "  Vulkan support: $([ $_enable_vulkan -eq 1 ] && echo 'enabled' || echo 'disabled')"
+    msg2 "==================================================================="
+    msg2 ""
+    msg2 "To enable GPU acceleration:"
+    msg2 "  CUDA: export ENABLE_CUDA=1 before running makepkg"
+    msg2 "  Vulkan: export ENABLE_VULKAN=1 before running makepkg"
+    msg2 "==================================================================="
+    
+    # Check dependencies if GPU acceleration is requested
+    if [ $_enable_cuda -eq 1 ]; then
+        if ! command -v nvcc &> /dev/null && [ ! -d "/opt/cuda" ]; then
+            warning "CUDA support requested but CUDA toolkit not found."
+            warning "Install CUDA: sudo pacman -S cuda (or cuda from AUR)"
+        fi
+    fi
+    
+    if [ $_enable_vulkan -eq 1 ]; then
+        if ! pacman -Qi vulkan-headers &> /dev/null; then
+            warning "Vulkan support requested but vulkan-headers not installed."
+            warning "Install Vulkan: sudo pacman -S vulkan-headers vulkan-icd-loader"
+        fi
+    fi
+}
+
+build() {
+    cd "$srcdir/$pkgname"
+    
+    # Download whisper model
+    local model_dir="$HOME/.local/share/voice-assistant/models"
+    local model_file="$model_dir/ggml-tiny.en.bin"
+    
+    if [ ! -f "$model_file" ]; then
+        msg2 "Downloading whisper tiny.en model (~75MB)..."
+        mkdir -p "$model_dir"
+        cd whisper.cpp
+        bash models/download-ggml-model.sh tiny.en
+        if [ -f "models/ggml-tiny.en.bin" ]; then
+            mv models/ggml-tiny.en.bin "$model_file"
+        fi
+        cd ..
+    fi
+    
+    # Build whisper.cpp first
+    msg2 "Building whisper.cpp..."
+    cd whisper.cpp
+    
+    local cmake_opts="-DCMAKE_BUILD_TYPE=Release"
+    
+    if [ $_enable_cuda -eq 1 ]; then
+        msg2 "Configuring whisper.cpp with CUDA support..."
+        cmake_opts="$cmake_opts -DGGML_CUDA=ON"
+        if [ -d "/opt/cuda" ]; then
+            cmake_opts="$cmake_opts -DCUDAToolkit_ROOT=/opt/cuda"
+        fi
+    fi
+    
+    if [ $_enable_vulkan -eq 1 ]; then
+        msg2 "Configuring whisper.cpp with Vulkan support..."
+        cmake_opts="$cmake_opts -DGGML_VULKAN=ON"
+    fi
+    
+    cmake -B build $cmake_opts
+    cmake --build build --parallel $(nproc)
+    cd ..
+    
+    # Build the service
+    msg2 "Building GNOME Assistant service..."
+    cd service
+    
+    cmake_opts="-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DWHISPER_CPP_DIR=$srcdir/$pkgname/whisper.cpp"
+    
+    if [ $_enable_cuda -eq 1 ]; then
+        cmake_opts="$cmake_opts -DGGML_CUDA=ON"
+        if [ -d "/opt/cuda" ]; then
+            cmake_opts="$cmake_opts -DCUDAToolkit_ROOT=/opt/cuda -DCMAKE_CUDA_COMPILER=/opt/cuda/bin/nvcc"
+        fi
+    fi
+    
+    if [ $_enable_vulkan -eq 1 ]; then
+        cmake_opts="$cmake_opts -DGGML_VULKAN=ON"
+    fi
+    
+    cmake -B build $cmake_opts
+    cmake --build build --parallel $(nproc)
+}
+
+package() {
+    cd "$srcdir/$pkgname"
+    
+    # Install the service binary
+    cd service/build
+    DESTDIR="$pkgdir" cmake --install .
+    
+    cd "$srcdir/$pkgname"
+    
+    # Install systemd service file
+    install -Dm644 systemd/gnome-assistant.service \
+        "$pkgdir/usr/lib/systemd/user/gnome-assistant.service"
+    
+    # Install GNOME extension
+    local ext_dir="$pkgdir/usr/share/gnome-shell/extensions/gnome-assistant@saim"
+    install -dm755 "$ext_dir"
+    cp -r gnome-extension/gnome-assistant@saim/* "$ext_dir/"
+    
+    # Compile extension schemas
+    glib-compile-schemas "$ext_dir/schemas/" || true
+    
+    # Install default configuration
+    install -Dm644 config.json \
+        "$pkgdir/usr/share/gnome-assistant/config.json"
+    
+    # Install documentation
+    install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 GETTING_STARTED.md "$pkgdir/usr/share/doc/$pkgname/GETTING_STARTED.md"
+    install -Dm644 docs/GPU_ACCELERATION.md "$pkgdir/usr/share/doc/$pkgname/GPU_ACCELERATION.md"
+}

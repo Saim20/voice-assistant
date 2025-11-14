@@ -90,7 +90,28 @@ sudo usermod -aG input $USER
 
 ## Installation
 
-### 1. Clone and Build
+### Option 1: AUR Package (Arch Linux)
+
+For Arch Linux users, install via AUR with optional GPU support:
+
+```bash
+# Clone repository
+git clone https://github.com/Saim20/gnome-assistant.git
+cd gnome-assistant
+
+# Install (CPU-only)
+makepkg -si
+
+# Or with GPU acceleration
+ENABLE_CUDA=1 makepkg -si      # NVIDIA
+ENABLE_VULKAN=1 makepkg -si    # AMD/Intel
+```
+
+See [AUR.md](AUR.md) for complete AUR installation guide.
+
+### Option 2: Manual Build
+
+#### 1. Clone and Build
 
 ```bash
 cd ~/Documents/Dev
@@ -107,7 +128,7 @@ The build script will:
 - Download the tiny.en model (~75MB) if needed
 - Build the C++ service
 
-### 2. Install
+#### 2. Install
 
 ```bash
 ./install.sh
@@ -119,7 +140,7 @@ This installs:
 - Systemd user service
 - GNOME extension to `~/.local/share/gnome-shell/extensions/`
 
-### 3. Enable and Start
+#### 3. Enable and Start
 
 ```bash
 # Enable the GNOME extension
