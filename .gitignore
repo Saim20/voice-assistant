@@ -42,3 +42,11 @@ __pycache__/
 gnome-extension/**/gschemas.compiled
 
 build/
+
+# AUR packaging artifacts
+src/
+pkg/
+*.pkg.tar.zst
+*.pkg.tar.xz
+*.pkg.tar.gz
+.SRCINFO
