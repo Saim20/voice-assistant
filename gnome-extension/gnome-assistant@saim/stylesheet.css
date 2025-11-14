@@ -1,30 +1,30 @@
-/* Voice Assistant Extension Styles */
+/* GNOME Assistant Extension Styles */
 
 /* Normal mode - subtle circular glow effect */
-.voice-assistant-normal {
+.gnome-assistant-normal {
     color: #ffffff;
-    animation: voice-assistant-idle 3s ease-in-out infinite;
+    animation: gnome-assistant-idle 3s ease-in-out infinite;
 }
 
 /* Command mode - red with more dynamic pulsing animation */
-.voice-assistant-command {
+.gnome-assistant-command {
     color: #ff6b6b !important;
-    animation: voice-assistant-active 1s ease-in-out infinite;
+    animation: gnome-assistant-active 1s ease-in-out infinite;
 }
 
 /* Typing mode - blue/teal color with gentle rotation */
-.voice-assistant-typing {
+.gnome-assistant-typing {
     color: #4ecdc4 !important;
-    animation: voice-assistant-typing-spin 2s linear infinite;
+    animation: gnome-assistant-typing-spin 2s linear infinite;
 }
 
 /* Listening indicator - slight glow when active */
-.voice-assistant-listening {
+.gnome-assistant-listening {
     text-shadow: 0 0 8px currentColor;
 }
 
 /* Idle animation for normal mode - subtle breathing effect */
-@keyframes voice-assistant-idle {
+@keyframes gnome-assistant-idle {
     0%, 100% { 
         opacity: 0.8;
         transform: scale(1.0);
@@ -38,7 +38,7 @@
 }
 
 /* Active animation for command mode - urgent pulsing */
-@keyframes voice-assistant-active {
+@keyframes gnome-assistant-active {
     0% { 
         opacity: 1.0;
         transform: scale(1.0);
@@ -57,7 +57,7 @@
 }
 
 /* Typing animation - gentle rotation with glow */
-@keyframes voice-assistant-typing-spin {
+@keyframes gnome-assistant-typing-spin {
     0% { 
         transform: rotate(0deg);
         text-shadow: 0 0 4px currentColor;
@@ -78,18 +78,18 @@
 }
 
 /* Menu item styles */
-.voice-assistant-mode-item {
+.gnome-assistant-mode-item {
     font-weight: bold;
 }
 
-.voice-assistant-buffer-item {
+.gnome-assistant-buffer-item {
     font-family: monospace;
     font-size: 0.9em;
     color: #888;
 }
 
 /* Buffer text display in panel */
-.voice-assistant-buffer-text {
+.gnome-assistant-buffer-text {
     font-size: 0.75em;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Cantarell, sans-serif;
     font-weight: 500;
@@ -107,7 +107,7 @@
 }
 
 /* Optional label styling (if enabled) */
-.voice-assistant-label {
+.gnome-assistant-label {
     font-size: 0.8em;
     font-weight: bold;
     margin-left: 4px;
@@ -115,14 +115,14 @@
 }
 
 /* Buffer text color variations by mode */
-.voice-assistant-command .voice-assistant-buffer-text {
+.gnome-assistant-command .gnome-assistant-buffer-text {
     color: rgba(255, 255, 255, 0.95);
     background: linear-gradient(135deg, rgba(255, 107, 107, 0.2), rgba(255, 80, 80, 0.15));
     border-color: rgba(255, 107, 107, 0.3);
     box-shadow: 0 2px 8px rgba(255, 107, 107, 0.2);
 }
 
-.voice-assistant-typing .voice-assistant-buffer-text {
+.gnome-assistant-typing .gnome-assistant-buffer-text {
     color: rgba(255, 255, 255, 0.95);
     background: linear-gradient(135deg, rgba(78, 205, 196, 0.2), rgba(64, 224, 208, 0.15));
     border-color: rgba(78, 205, 196, 0.3);

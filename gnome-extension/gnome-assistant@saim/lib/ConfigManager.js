@@ -1,7 +1,7 @@
 /**
  * ConfigManager.js - Configuration management utilities
  * Handles loading, saving, and synchronizing configuration with the D-Bus service
- * Config file syncs between GNOME extension preferences and voice assistant service
+ * Config file syncs between GNOME extension preferences and gnome assistant service
  */
 
 import Gio from 'gi://Gio';
@@ -10,7 +10,7 @@ import GLib from 'gi://GLib';
 export class ConfigManager {
     constructor(settings) {
         this._settings = settings;
-        this._configPath = GLib.get_home_dir() + '/.config/nerd-dictation/config.json';
+        this._configPath = GLib.get_home_dir() + '/.config/gnome-assistant/config.json';
         this._configFile = Gio.File.new_for_path(this._configPath);
         this._config = null;
     }

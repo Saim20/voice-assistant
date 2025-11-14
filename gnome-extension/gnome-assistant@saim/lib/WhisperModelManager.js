@@ -10,7 +10,7 @@ import GLib from 'gi://GLib';
 
 export class WhisperModelManager {
     constructor() {
-        this._modelDir = GLib.get_home_dir() + '/.local/share/voice-assistant/models';
+        this._modelDir = GLib.get_home_dir() + '/.local/share/gnome-assistant/models';
         this._downloadInProgress = false;
         
         // Available whisper models with their details
@@ -227,7 +227,7 @@ export class WhisperModelManager {
     _getCurrentModel() {
         try {
             // First, try to read from config file
-            const configPath = GLib.get_home_dir() + '/.config/nerd-dictation/config.json';
+            const configPath = GLib.get_home_dir() + '/.config/gnome-assistant/config.json';
             const configFile = Gio.File.new_for_path(configPath);
             
             if (configFile.query_exists(null)) {
@@ -333,7 +333,7 @@ export class WhisperModelManager {
 
         // Run download in background
         try {
-            GLib.spawn_command_line_async(`sh -c '${command} && notify-send "Voice Assistant" "Model ${model.name} downloaded successfully"'`);
+            GLib.spawn_command_line_async(`sh -c '${command} && notify-send "GNOME Assistant" "Model ${model.name} downloaded successfully"'`);
             
             // Re-enable button after a delay (the download continues in background)
             GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 3, () => {
@@ -358,7 +358,7 @@ export class WhisperModelManager {
     _selectModel(model, window) {
         try {
             // Load current config
-            const configPath = GLib.get_home_dir() + '/.config/nerd-dictation/config.json';
+            const configPath = GLib.get_home_dir() + '/.config/gnome-assistant/config.json';
             const configFile = Gio.File.new_for_path(configPath);
             
             if (!configFile.query_exists(null)) {
@@ -390,7 +390,7 @@ export class WhisperModelManager {
             this._showToast(window, `Selected ${model.name}. Restarting service...`);
             
             // Restart the service to apply the change
-            GLib.spawn_command_line_async('systemctl --user restart voice-assistant.service');
+            GLib.spawn_command_line_async('systemctl --user restart gnome-assistant.service');
             
             // Show notification after a delay
             GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {

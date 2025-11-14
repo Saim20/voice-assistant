@@ -1,12 +1,12 @@
 [Unit]
-Description=Voice Assistant Service with Whisper.cpp
-Documentation=https://github.com/saim/voice-assistant-gnome
+Description=GNOME Assistant Service with Whisper.cpp
+Documentation=https://github.com/saim/gnome-assistant
 After=graphical-session.target
 
 [Service]
 Type=dbus
-BusName=com.github.saim.VoiceAssistant
-ExecStart=%h/.local/bin/voice-assistant-service
+BusName=com.github.saim.GnomeAssistant
+ExecStart=%h/.local/bin/gnome-assistant-service
 Restart=on-failure
 RestartSec=5
 
@@ -23,7 +23,7 @@ PrivateTmp=false
 NoNewPrivileges=false
 
 # Allow access to config and model directories
-ReadWritePaths=%h/.config/nerd-dictation
+ReadWritePaths=%h/.config/gnome-assistant
 
 [Install]
 WantedBy=default.target

@@ -1,5 +1,0 @@
-[D-BUS Service]
-Name=com.github.saim.VoiceAssistant
-Exec=@CMAKE_INSTALL_PREFIX@/bin/voice-assistant-service
-User=
-SystemdService=voice-assistant.service

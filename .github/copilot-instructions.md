@@ -1,11 +1,11 @@
-# Voice Assistant - AI Agent Instructions
+# GNOME Assistant - AI Agent Instructions
 
 ## Project Overview
 
 This is a sophisticated voice-controlled system with a modern D-Bus architecture and three core components:
 1. **C++ D-Bus Service** (`service/`) - Core voice processing engine using whisper.cpp for offline speech recognition
 2. **GNOME Shell Extension** (`gnome-extension/`) - Visual feedback and D-Bus client integration  
-3. **Whisper.cpp Models** (`~/.local/share/voice-assistant/models/`) - Fast, accurate offline speech recognition (tiny.en model)
+3. **Whisper.cpp Models** (`~/.local/share/gnome-assistant/models/`) - Fast, accurate offline speech recognition (tiny.en model)
 
 ## Architecture & Data Flow
 
@@ -16,13 +16,13 @@ The system operates in three distinct modes managed via D-Bus:
 - **Typing Mode**: Converts speech directly to text input (via ydotool key simulation)
 
 ### D-Bus Communication
-All components communicate via D-Bus interface `com.github.saim.VoiceAssistant`:
+All components communicate via D-Bus interface `com.github.saim.GnomeAssistant`:
 - Methods: SetMode, GetMode, GetStatus, Start, Stop, UpdateConfig, etc.
 - Signals: ModeChanged, CommandExecuted, BufferChanged, StatusChanged
 - Properties: IsRunning, CurrentMode, CurrentBuffer, Version
 
 ### Configuration System
-Uses modern JSON format (`~/.config/nerd-dictation/config.json`):
+Uses modern JSON format (`~/.config/gnome-assistant/config.json`):
 - Simple array-based command structure
 - Configurable thresholds, intervals, and hotword
 - GNOME extension preferences sync to config file via D-Bus
@@ -34,45 +34,45 @@ Commands map voice phrases to shell commands, with ydotool for keyboard/window c
 ### Starting/Stopping the System
 ```bash
 # Service control via systemd
-systemctl --user start voice-assistant.service
-systemctl --user stop voice-assistant.service
-systemctl --user restart voice-assistant.service
-systemctl --user status voice-assistant.service
+systemctl --user start gnome-assistant.service
+systemctl --user stop gnome-assistant.service
+systemctl --user restart gnome-assistant.service
+systemctl --user status gnome-assistant.service
 
 # View logs
-journalctl --user -u voice-assistant.service -f
+journalctl --user -u gnome-assistant.service -f
 
 # GNOME extension management
-gnome-extensions enable voice-assistant@saim
-gnome-extensions disable voice-assistant@saim
-gnome-extensions prefs voice-assistant@saim
+gnome-extensions enable gnome-assistant@saim
+gnome-extensions disable gnome-assistant@saim
+gnome-extensions prefs gnome-assistant@saim
 ```
 
 ### D-Bus Control
 ```bash
 # Set mode
-gdbus call --session --dest com.github.saim.VoiceAssistant \
-  --object-path /com/github/saim/VoiceAssistant \
-  --method com.github.saim.VoiceAssistant.SetMode "command"
+gdbus call --session --dest com.github.saim.GnomeAssistant \
+  --object-path /com/github/saim/GnomeAssistant \
+  --method com.github.saim.GnomeAssistant.SetMode "command"
 
 # Get status
-gdbus call --session --dest com.github.saim.VoiceAssistant \
-  --object-path /com/github/saim/VoiceAssistant \
-  --method com.github.saim.VoiceAssistant.GetStatus
+gdbus call --session --dest com.github.saim.GnomeAssistant \
+  --object-path /com/github/saim/GnomeAssistant \
+  --method com.github.saim.GnomeAssistant.GetStatus
 
 # Monitor signals
-dbus-monitor --session "interface='com.github.saim.VoiceAssistant'"
+dbus-monitor --session "interface='com.github.saim.GnomeAssistant'"
 ```
 
 ### Configuration via GNOME Extension
 - Access via panel icon → Preferences
-- Real-time updates to `~/.config/nerd-dictation/config.json`
+- Real-time updates to `~/.config/gnome-assistant/config.json`
 - Settings: command threshold, processing interval, hotword, notifications
 - Visual key command builder for ydotool commands
 
 ### Debugging Tools
-- Service logs: `journalctl --user -u voice-assistant.service -f`
-- D-Bus introspection: `gdbus introspect --session --dest com.github.saim.VoiceAssistant --object-path /com/github/saim/VoiceAssistant`
+- Service logs: `journalctl --user -u gnome-assistant.service -f`
+- D-Bus introspection: `gdbus introspect --session --dest com.github.saim.GnomeAssistant --object-path /com/github/saim/GnomeAssistant`
 - Extension logs: `journalctl -f -o cat /usr/bin/gnome-shell`
 - Status via panel menu or D-Bus GetStatus method
 
@@ -103,7 +103,7 @@ Text buffer tracks recognized speech and is accessible via:
 ## Integration Points
 
 ### GNOME Shell Extension
-- D-Bus client connecting to `com.github.saim.VoiceAssistant`
+- D-Bus client connecting to `com.github.saim.GnomeAssistant`
 - Updates panel icon: microphone (normal), red pulsing (command), keyboard (typing)  
 - Provides manual mode switching via panel menu
 - Settings UI syncs to voice assistant config file via D-Bus
@@ -117,7 +117,7 @@ Essential for Wayland input simulation:
 - Format: `keycode:state` where state is 1 (press) or 0 (release)
 
 ### Whisper.cpp Models
-Local speech recognition models in `~/.local/share/voice-assistant/models/`:
+Local speech recognition models in `~/.local/share/gnome-assistant/models/`:
 - `ggml-tiny.en.bin` - Default fast model (~75MB)
 - Supports base, small, medium models for better accuracy
 - CPU-based inference, efficient on modern processors
@@ -132,12 +132,12 @@ Local speech recognition models in `~/.local/share/voice-assistant/models/`:
 
 ## File Locations
 
-**Service:** `~/.local/bin/voice-assistant-service`  
-**Config:** `~/.config/nerd-dictation/config.json`  
-**Extension:** `~/.local/share/gnome-shell/extensions/voice-assistant@saim/`  
-**Models:** `~/.local/share/voice-assistant/models/`  
-**D-Bus Interface:** `~/.local/share/dbus-1/interfaces/com.github.saim.VoiceAssistant.xml`  
-**Systemd Service:** `~/.config/systemd/user/voice-assistant.service`
+**Service:** `~/.local/bin/gnome-assistant-service`  
+**Config:** `~/.config/gnome-assistant/config.json`  
+**Extension:** `~/.local/share/gnome-shell/extensions/gnome-assistant@saim/`  
+**Models:** `~/.local/share/gnome-assistant/models/`  
+**D-Bus Interface:** `~/.local/share/dbus-1/interfaces/com.github.saim.GnomeAssistant.xml`  
+**Systemd Service:** `~/.config/systemd/user/gnome-assistant.service`
 
 ## Configuration
 

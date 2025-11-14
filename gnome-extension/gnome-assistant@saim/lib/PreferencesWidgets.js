@@ -211,7 +211,7 @@ export class StatusManager {
      */
     checkConfigStatus() {
         try {
-            const configPath = GLib.get_home_dir() + '/.config/nerd-dictation/config.json';
+            const configPath = GLib.get_home_dir() + '/.config/gnome-assistant/config.json';
             this._configFile = Gio.File.new_for_path(configPath);
             
             if (this._configFile.query_exists(null)) {

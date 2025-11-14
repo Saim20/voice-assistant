@@ -14,7 +14,7 @@ import {ConfigManager} from './lib/ConfigManager.js';
 // D-Bus interface XML
 const VoiceAssistantIface = `
 <node>
-  <interface name="com.github.saim.VoiceAssistant">
+  <interface name="com.github.saim.GnomeAssistant">
     <method name="SetMode">
       <arg direction="in" name="mode" type="s"/>
     </method>
@@ -76,7 +76,7 @@ const VoiceAssistantProxy = Gio.DBusProxy.makeProxyWrapper(VoiceAssistantIface);
 const VoiceAssistantIndicator = GObject.registerClass(
 class VoiceAssistantIndicator extends PanelMenu.Button {
     _init(settings) {
-        super._init(0.0, 'Voice Assistant');
+        super._init(0.0, 'GNOME Assistant');
         
         // Create panel UI
         this._box = new St.BoxLayout({
@@ -92,7 +92,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         
         this._bufferLabel = new St.Label({
             text: '',
-            style_class: 'voice-assistant-buffer-text',
+            style_class: 'gnome-assistant-buffer-text',
             y_align: 2
         });
         this._box.add_child(this._bufferLabel);
@@ -115,7 +115,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         // Setup settings handlers
         this._setupSettingsHandlers();
         
-        console.log('Voice Assistant: Extension initialized with D-Bus');
+        console.log('GNOME Assistant: Extension initialized with D-Bus');
     }
     
     _setupDBus() {
@@ -123,12 +123,12 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             // Create proxy to the D-Bus service
             this._proxy = new VoiceAssistantProxy(
                 Gio.DBus.session,
-                'com.github.saim.VoiceAssistant',
+                'com.github.saim.GnomeAssistant',
                 '/com/github/saim/VoiceAssistant',
                 (proxy, error) => {
                     if (error) {
-                        console.error('Voice Assistant: D-Bus connection error:', error);
-                        console.error('Failed to connect to Voice Assistant service');
+                        console.error('GNOME Assistant: D-Bus connection error:', error);
+                        console.error('Failed to connect to GNOME Assistant service');
                         return;
                     }
                     
@@ -137,12 +137,12 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             );
             
         } catch (e) {
-            console.error('Voice Assistant: Failed to create D-Bus proxy:', e);
+            console.error('GNOME Assistant: Failed to create D-Bus proxy:', e);
         }
     }
     
     _onDBusConnected() {
-        console.log('Voice Assistant: Connected to D-Bus service');
+        console.log('GNOME Assistant: Connected to D-Bus service');
         
         // Connect to signals
         this._proxy.connectSignal('ModeChanged', (proxy, sender, [newMode, oldMode]) => {
@@ -235,9 +235,9 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         this._prefsItem = new PopupMenu.PopupMenuItem('Preferences');
         this._prefsItem.connect('activate', () => {
             try {
-                GLib.spawn_command_line_async('gnome-extensions prefs voice-assistant@saim');
+                GLib.spawn_command_line_async('gnome-extensions prefs gnome-assistant@saim');
             } catch (e) {
-                console.error('Voice Assistant: Error opening preferences:', e);
+                console.error('GNOME Assistant: Error opening preferences:', e);
             }
         });
         this.menu.addMenuItem(this._prefsItem);
@@ -266,9 +266,9 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             this._proxy.SetConfigValueRemote('command_threshold', new GLib.Variant('d', threshold));
             this._proxy.SetConfigValueRemote('processing_interval', new GLib.Variant('d', interval));
             
-            console.log('Voice Assistant: Settings synced to service');
+            console.log('GNOME Assistant: Settings synced to service');
         } catch (e) {
-            console.error('Voice Assistant: Error syncing settings:', e);
+            console.error('GNOME Assistant: Error syncing settings:', e);
         }
     }
     
@@ -276,37 +276,37 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     
     _setMode(mode) {
         if (!this._proxy) {
-            console.error('Voice Assistant: Service not connected');
+            console.error('GNOME Assistant: Service not connected');
             return;
         }
         
         try {
             this._proxy.SetModeRemote(mode, (result, error) => {
                 if (error) {
-                    console.error('Voice Assistant: SetMode error:', error);
+                    console.error('GNOME Assistant: SetMode error:', error);
                     console.error('Failed to change mode');
                 }
             });
         } catch (e) {
-            console.error('Voice Assistant: SetMode exception:', e);
+            console.error('GNOME Assistant: SetMode exception:', e);
         }
     }
     
     _startService() {
         if (!this._proxy) {
-            console.error('Voice Assistant: Service not connected');
+            console.error('GNOME Assistant: Service not connected');
             return;
         }
         
         try {
             this._proxy.StartRemote((result, error) => {
                 if (error) {
-                    console.error('Voice Assistant: Start error:', error);
+                    console.error('GNOME Assistant: Start error:', error);
                     console.error('Failed to start service');
                 }
             });
         } catch (e) {
-            console.error('Voice Assistant: Start exception:', e);
+            console.error('GNOME Assistant: Start exception:', e);
         }
     }
     
@@ -316,11 +316,11 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         try {
             this._proxy.StopRemote((result, error) => {
                 if (error) {
-                    console.error('Voice Assistant: Stop error:', error);
+                    console.error('GNOME Assistant: Stop error:', error);
                 }
             });
         } catch (e) {
-            console.error('Voice Assistant: Stop exception:', e);
+            console.error('GNOME Assistant: Stop exception:', e);
         }
     }
     
@@ -330,11 +330,11 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         try {
             this._proxy.RestartRemote((result, error) => {
                 if (error) {
-                    console.error('Voice Assistant: Restart error:', error);
+                    console.error('GNOME Assistant: Restart error:', error);
                 }
             });
         } catch (e) {
-            console.error('Voice Assistant: Restart exception:', e);
+            console.error('GNOME Assistant: Restart exception:', e);
         }
     }
     
@@ -344,7 +344,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         try {
             this._proxy.GetStatusRemote((result, error) => {
                 if (error) {
-                    console.error('Voice Assistant: GetStatus error:', error);
+                    console.error('GNOME Assistant: GetStatus error:', error);
                     return;
                 }
                 
@@ -354,7 +354,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
                 }
             });
         } catch (e) {
-            console.error('Voice Assistant: GetStatus exception:', e);
+            console.error('GNOME Assistant: GetStatus exception:', e);
         }
     }
     
@@ -365,7 +365,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         this._updateDisplay();
         
         // Mode changes are shown in the panel, no notification needed
-        console.log(`Voice Assistant: Mode changed from ${oldMode} to ${newMode}`);
+        console.log(`GNOME Assistant: Mode changed from ${oldMode} to ${newMode}`);
     }
     
     _onBufferChanged(buffer) {
@@ -374,7 +374,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     }
     
     _onCommandExecuted(command, phrase, confidence) {
-        console.log(`Voice Assistant: Command executed: ${phrase} (${(confidence * 100).toFixed(1)}%)`);
+        console.log(`GNOME Assistant: Command executed: ${phrase} (${(confidence * 100).toFixed(1)}%)`);
         
         // Command execution logged to console only, no notifications
     }
@@ -394,12 +394,12 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     }
     
     _onError(message, details) {
-        console.error('Voice Assistant:', message, details);
+        console.error('GNOME Assistant:', message, details);
     }
     
     _onNotification(title, message, urgency) {
         // Notifications disabled - service notifications are logged only
-        console.log(`Voice Assistant notification: ${title} - ${message}`);
+        console.log(`GNOME Assistant notification: ${title} - ${message}`);
     }
     
     // UI updates
@@ -479,14 +479,14 @@ export default class VoiceAssistantExtension extends Extension {
     }
 
     enable() {
-        console.log('Voice Assistant: Enabling extension');
+        console.log('GNOME Assistant: Enabling extension');
         const settings = this.getSettings();
         this._indicator = new VoiceAssistantIndicator(settings);
         Main.panel.addToStatusArea('voice-assistant', this._indicator);
     }
 
     disable() {
-        console.log('Voice Assistant: Disabling extension');
+        console.log('GNOME Assistant: Disabling extension');
         if (this._indicator) {
             this._indicator.destroy();
             this._indicator = null;

@@ -34,7 +34,7 @@ VoiceAssistantService::VoiceAssistantService(sdbus::IConnection& connection, std
     m_object = sdbus::createObject(m_connection, sdbus::ObjectPath(m_objectPath));
 
     // Register D-Bus methods using vtable API (sdbus-c++ v2.x)
-    const char* interfaceName = "com.github.saim.VoiceAssistant";
+    const char* interfaceName = "com.github.saim.GnomeAssistant";
     
     // Helper lambdas for method callbacks
     auto setModeCallback = [this](sdbus::MethodCall call) {
@@ -125,7 +125,7 @@ VoiceAssistantService::VoiceAssistantService(sdbus::IConnection& connection, std
 
     // Set config path
     const char* home = std::getenv("HOME");
-    m_configPath = std::string(home) + "/.config/nerd-dictation/config.json";
+    m_configPath = std::string(home) + "/.config/gnome-assistant/config.json";
     m_logFile = "/tmp/voice_assistant.log";
 
     // Load configuration
@@ -325,35 +325,35 @@ std::string VoiceAssistantService::GetBuffer() {
 // Signal emission methods
 
 void VoiceAssistantService::emitModeChanged(const std::string& newMode, const std::string& oldMode) {
-    m_object->emitSignal("ModeChanged").onInterface("com.github.saim.VoiceAssistant")
+    m_object->emitSignal("ModeChanged").onInterface("com.github.saim.GnomeAssistant")
         .withArguments(newMode, oldMode);
 }
 
 void VoiceAssistantService::emitBufferChanged(const std::string& buffer) {
-    m_object->emitSignal("BufferChanged").onInterface("com.github.saim.VoiceAssistant")
+    m_object->emitSignal("BufferChanged").onInterface("com.github.saim.GnomeAssistant")
         .withArguments(buffer);
 }
 
 void VoiceAssistantService::emitCommandExecuted(const std::string& command, 
                                                 const std::string& phrase, double confidence) {
-    m_object->emitSignal("CommandExecuted").onInterface("com.github.saim.VoiceAssistant")
+    m_object->emitSignal("CommandExecuted").onInterface("com.github.saim.GnomeAssistant")
         .withArguments(command, phrase, confidence);
 }
 
 void VoiceAssistantService::emitStatusChanged(const std::map<std::string, sdbus::Variant>& status) {
-    m_object->emitSignal("StatusChanged").onInterface("com.github.saim.VoiceAssistant")
+    m_object->emitSignal("StatusChanged").onInterface("com.github.saim.GnomeAssistant")
         .withArguments(status);
 }
 
 void VoiceAssistantService::emitError(const std::string& message, const std::string& details) {
-    m_object->emitSignal("Error").onInterface("com.github.saim.VoiceAssistant")
+    m_object->emitSignal("Error").onInterface("com.github.saim.GnomeAssistant")
         .withArguments(message, details);
 }
 
 void VoiceAssistantService::emitNotification(const std::string& title, 
                                              const std::string& message, 
                                              const std::string& urgency) {
-    m_object->emitSignal("Notification").onInterface("com.github.saim.VoiceAssistant")
+    m_object->emitSignal("Notification").onInterface("com.github.saim.GnomeAssistant")
         .withArguments(title, message, urgency);
 }
 

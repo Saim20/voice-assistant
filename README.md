@@ -1,4 +1,4 @@
-# Voice Assistant with Whisper.cpp and GNOME Integration
+# GNOME Assistant with Whisper.cpp and GNOME Integration
 
 A modern, D-Bus-based voice assistant for GNOME Shell that uses whisper.cpp for offline speech recognition.
 
@@ -94,8 +94,8 @@ sudo usermod -aG input $USER
 
 ```bash
 cd ~/Documents/Dev
-git clone https://github.com/your-repo/voice-assistant.git
-cd voice-assistant
+git clone https://github.com/Saim20/gnome-assistant.git
+cd gnome-assistant
 
 # Build the service (downloads whisper.cpp and models automatically)
 ./build.sh
@@ -114,7 +114,7 @@ The build script will:
 ```
 
 This installs:
-- Service binary to `~/.local/bin/voice-assistant-service`
+- Service binary to `~/.local/bin/gnome-assistant-service`
 - D-Bus service file
 - Systemd user service
 - GNOME extension to `~/.local/share/gnome-shell/extensions/`
@@ -123,13 +123,13 @@ This installs:
 
 ```bash
 # Enable the GNOME extension
-gnome-extensions enable voice-assistant@saim
+gnome-extensions enable gnome-assistant@saim
 
 # Start the service
-systemctl --user start voice-assistant.service
+systemctl --user start gnome-assistant.service
 
 # Check status
-systemctl --user status voice-assistant.service
+systemctl --user status gnome-assistant.service
 ```
 
 ## Configuration
@@ -146,7 +146,7 @@ systemctl --user status voice-assistant.service
 
 ### Via Config File
 
-Edit `~/.config/nerd-dictation/config.json`:
+Edit `~/.config/gnome-assistant/config.json`:
 
 The default configuration file includes comprehensive documentation with:
 - Complete ydotool key code reference
@@ -384,35 +384,35 @@ sudo chmod 0666 /run/ydotool/socket
 
 ## D-Bus Interface
 
-The service exposes `com.github.saim.VoiceAssistant` on the session bus.
+The service exposes `com.github.saim.GnomeAssistant` on the session bus.
 
 ### Example: Control via D-Bus
 
 ```bash
 # Get current mode
 gdbus call --session \
-  --dest com.github.saim.VoiceAssistant \
-  --object-path /com/github/saim/VoiceAssistant \
-  --method com.github.saim.VoiceAssistant.GetMode
+  --dest com.github.saim.GnomeAssistant \
+  --object-path /com/github/saim/GnomeAssistant \
+  --method com.github.saim.GnomeAssistant.GetMode
 
 # Set mode
 gdbus call --session \
-  --dest com.github.saim.VoiceAssistant \
-  --object-path /com/github/saim/VoiceAssistant \
-  --method com.github.saim.VoiceAssistant.SetMode "command"
+  --dest com.github.saim.GnomeAssistant \
+  --object-path /com/github/saim/GnomeAssistant \
+  --method com.github.saim.GnomeAssistant.SetMode "command"
 
 # Get status
 gdbus call --session \
-  --dest com.github.saim.VoiceAssistant \
-  --object-path /com/github/saim/VoiceAssistant \
-  --method com.github.saim.VoiceAssistant.GetStatus
+  --dest com.github.saim.GnomeAssistant \
+  --object-path /com/github/saim/GnomeAssistant \
+  --method com.github.saim.GnomeAssistant.GetStatus
 ```
 
 ### Monitoring Signals
 
 ```bash
 dbus-monitor --session \
-  "interface='com.github.saim.VoiceAssistant'"
+  "interface='com.github.saim.GnomeAssistant'"
 ```
 
 ## Development
@@ -420,7 +420,7 @@ dbus-monitor --session \
 ### Project Structure
 
 ```
-voice-assistant/
+gnome-assistant/
 ├── service/              # C++ D-Bus service
 │   ├── src/
 │   │   ├── main.cpp
@@ -428,15 +428,15 @@ voice-assistant/
 │   │   └── VoiceAssistantService.hpp
 │   └── CMakeLists.txt
 ├── gnome-extension/      # GNOME Shell extension
-│   └── voice-assistant@saim/
+│   └── gnome-assistant@saim/
 │       ├── extension.js  # Main extension (D-Bus client)
 │       ├── prefs.js      # Preferences UI
 │       ├── metadata.json
 │       └── lib/          # Modular components
 ├── dbus/                 # D-Bus interface definition
-│   └── com.github.saim.VoiceAssistant.xml
+│   └── com.github.saim.GnomeAssistant.xml
 ├── systemd/              # Systemd service file
-│   └── voice-assistant.service
+│   └── gnome-assistant.service
 ├── build.sh              # Build script
 ├── install.sh            # Installation script
 └── config.json           # Default configuration
@@ -453,26 +453,26 @@ rm -rf service/build
 ./install.sh
 
 # Restart service
-systemctl --user restart voice-assistant.service
+systemctl --user restart gnome-assistant.service
 
 # Restart extension
-gnome-extensions disable voice-assistant@saim
-gnome-extensions enable voice-assistant@saim
+gnome-extensions disable gnome-assistant@saim
+gnome-extensions enable gnome-assistant@saim
 ```
 
 ### Debugging
 
 ```bash
 # Service logs
-journalctl --user -u voice-assistant.service -f
+journalctl --user -u gnome-assistant.service -f
 
 # Extension logs
 journalctl -f -o cat /usr/bin/gnome-shell
 
 # D-Bus introspection
 gdbus introspect --session \
-  --dest com.github.saim.VoiceAssistant \
-  --object-path /com/github/saim/VoiceAssistant
+  --dest com.github.saim.GnomeAssistant \
+  --object-path /com/github/saim/GnomeAssistant
 ```
 
 ## Troubleshooting
@@ -484,23 +484,23 @@ gdbus introspect --session \
 pkg-config --exists sdbus-c++ jsoncpp && echo "OK" || echo "Missing deps"
 
 # Check model exists
-ls -lh ~/.local/share/voice-assistant/models/ggml-tiny.en.bin
+ls -lh ~/.local/share/gnome-assistant/models/ggml-tiny.en.bin
 
 # Manual start for debugging
-~/.local/bin/voice-assistant-service
+~/.local/bin/gnome-assistant-service
 ```
 
 ### Extension not connecting
 
 ```bash
 # Verify service is running
-systemctl --user status voice-assistant.service
+systemctl --user status gnome-assistant.service
 
 # Check D-Bus registration
 gdbus call --session \
   --dest org.freedesktop.DBus \
   --object-path /org/freedesktop/DBus \
-  --method org.freedesktop.DBus.ListNames | grep VoiceAssistant
+  --method org.freedesktop.DBus.ListNames | grep GnomeAssistant
 ```
 
 ### No audio capture

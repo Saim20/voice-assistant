@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<schemalist gettext-domain="voice-assistant">
-  <schema id="org.gnome.shell.extensions.voice-assistant" path="/org/gnome/shell/extensions/voice-assistant/">
+<schemalist gettext-domain="gnome-assistant">
+  <schema id="org.gnome.shell.extensions.gnome-assistant" path="/org/gnome/shell/extensions/gnome-assistant/">
     <key name="update-interval" type="i">
       <default>2</default>
       <range min="1" max="10"/>

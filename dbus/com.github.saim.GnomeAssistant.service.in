@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=com.github.saim.GnomeAssistant
+Exec=@CMAKE_INSTALL_PREFIX@/bin/gnome-assistant-service
+User=
+SystemdService=gnome-assistant.service

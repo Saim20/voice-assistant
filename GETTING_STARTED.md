@@ -1,4 +1,4 @@
-# Getting Started with Voice Assistant
+# Getting Started with GNOME Assistant
 
 ## Quick Start
 
@@ -33,13 +33,13 @@ sudo pacman -S cmake gcc sdbus-cpp jsoncpp libpulse git
 
 ```bash
 # Enable GNOME extension
-gnome-extensions enable voice-assistant@saim
+gnome-extensions enable gnome-assistant@saim
 
 # Start the service
-systemctl --user start voice-assistant.service
+systemctl --user start gnome-assistant.service
 
 # Verify it's running
-systemctl --user status voice-assistant.service
+systemctl --user status gnome-assistant.service
 ```
 
 ### 4. First Use
@@ -71,7 +71,7 @@ If commands aren't executing reliably:
 2. Lower **Command Threshold** (try 70% instead of 80%)
 3. Increase **Processing Interval** (try 2.0s instead of 1.5s)
 
-**Note**: The tiny.en model is optimized for speed. If you need better accuracy for complex phrases, you can manually upgrade to a larger model (base, small, medium) by replacing the model file in `~/.local/share/voice-assistant/models/`.
+**Note**: The tiny.en model is optimized for speed. If you need better accuracy for complex phrases, you can manually upgrade to a larger model (base, small, medium) by replacing the model file in `~/.local/share/gnome-assistant/models/`.
 
 ### Changing the Hotword
 
@@ -85,14 +85,14 @@ If commands aren't executing reliably:
 
 The D-Bus service isn't running. Start it:
 ```bash
-systemctl --user start voice-assistant.service
+systemctl --user start gnome-assistant.service
 ```
 
 ### Commands not executing
 
 1. Check the threshold in Preferences
 2. Speak clearly and wait for the processing interval
-3. Check logs: `journalctl --user -u voice-assistant.service -f`
+3. Check logs: `journalctl --user -u gnome-assistant.service -f`
 
 ### Microphone not working
 
@@ -114,7 +114,7 @@ journalctl -f -o cat /usr/bin/gnome-shell
 
 # Reinstall
 ./install.sh
-gnome-extensions enable voice-assistant@saim
+gnome-extensions enable gnome-assistant@saim
 ```
 
 ## Next Steps
@@ -126,6 +126,6 @@ gnome-extensions enable voice-assistant@saim
 
 ## Need Help?
 
-- Check the logs: `/tmp/voice_assistant.log` and `journalctl --user -u voice-assistant.service`
-- Verify D-Bus connection: `gdbus introspect --session --dest com.github.saim.VoiceAssistant --object-path /com/github/saim/VoiceAssistant`
+- Check the logs: `/tmp/voice_assistant.log` and `journalctl --user -u gnome-assistant.service`
+- Verify D-Bus connection: `gdbus introspect --session --dest com.github.saim.GnomeAssistant --object-path /com/github/saim/GnomeAssistant`
 - Open an issue on GitHub with log output
