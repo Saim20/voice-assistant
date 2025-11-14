@@ -365,14 +365,24 @@ bool VoiceAssistantService::initializeWhisper(const std::string& modelPath) {
     // Use configured model, or default to tiny.en
     std::string modelFile = modelPath + "/" + m_whisperModel;
     
-    // Initialize whisper context
+    // Initialize whisper context with GPU support
     whisper_context_params cparams = whisper_context_default_params();
+    
+    // Enable GPU acceleration - whisper.cpp will automatically use CUDA or Vulkan if available
+    cparams.use_gpu = true;
+    cparams.gpu_device = 0;  // Use first GPU device
+    
+    log("INFO", "Attempting to initialize Whisper with GPU acceleration...");
     m_whisperCtx = whisper_init_from_file_with_params(modelFile.c_str(), cparams);
     
     if (!m_whisperCtx) {
         log("ERROR", "Failed to load Whisper model from: " + modelFile);
         return false;
     }
+    
+    // Log that model loaded successfully
+    log("INFO", "Whisper model loaded successfully (GPU acceleration: " + 
+        std::string(cparams.use_gpu ? "enabled" : "disabled") + ")");
     
     // Setup whisper parameters
     m_whisperParams = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
@@ -383,7 +393,7 @@ bool VoiceAssistantService::initializeWhisper(const std::string& modelPath) {
     m_whisperParams.n_threads = 4;
     m_whisperParams.translate = false;
     
-    log("INFO", "Whisper model loaded successfully");
+    log("INFO", "Whisper initialization complete");
     return true;
 }
 

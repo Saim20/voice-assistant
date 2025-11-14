@@ -85,10 +85,27 @@ mkdir -p "$BUILD_DIR"
 # Configure
 echo "Configuring..."
 cd "$BUILD_DIR"
-cmake .. \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
-    -DWHISPER_CPP_DIR="$PROJECT_DIR/whisper.cpp"
+
+# Set CUDA paths if installed
+if [ -d "/opt/cuda" ]; then
+    export CUDA_PATH="/opt/cuda"
+    export PATH="$CUDA_PATH/bin:$PATH"
+    echo "CUDA detected at $CUDA_PATH, enabling GPU acceleration..."
+    
+    cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
+        -DWHISPER_CPP_DIR="$PROJECT_DIR/whisper.cpp" \
+        -DCUDAToolkit_ROOT="/opt/cuda" \
+        -DCMAKE_CUDA_COMPILER="/opt/cuda/bin/nvcc"
+else
+    echo "CUDA not found, building CPU-only version..."
+    
+    cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
+        -DWHISPER_CPP_DIR="$PROJECT_DIR/whisper.cpp"
+fi
 
 echo
 
