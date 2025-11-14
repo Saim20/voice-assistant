@@ -91,55 +91,72 @@ export class WhisperModelManager {
             description: 'Download and manage speech recognition models',
         });
 
-        // Current model status
-        const currentModel = this._getCurrentModel();
-        const statusRow = new Adw.ActionRow({
-            title: 'Current Model',
-            subtitle: currentModel ? `Using ${currentModel}` : 'No model detected',
-        });
-        
-        if (currentModel) {
-            const sizeInfo = this._getModelSize(currentModel);
-            if (sizeInfo) {
-                const sizeLabel = new Gtk.Label({
-                    label: sizeInfo,
-                    css_classes: ['dim-label'],
-                    valign: Gtk.Align.CENTER,
-                });
-                statusRow.add_suffix(sizeLabel);
+        // Refresh function to rebuild the group
+        const refreshGroup = () => {
+            // Remove all rows from the group properly
+            // We need to remove all AdwActionRow and AdwExpanderRow children
+            while (group.get_first_child()) {
+                group.remove(group.get_first_child());
             }
-        }
+            
+            // Rebuild content
+            buildGroupContent();
+        };
         
-        group.add(statusRow);
+        const buildGroupContent = () => {
+            // Current model status
+            const currentModel = this._getCurrentModel();
+            const statusRow = new Adw.ActionRow({
+                title: 'Current Model',
+                subtitle: currentModel ? `Using ${currentModel}` : 'No model detected',
+            });
+            
+            if (currentModel) {
+                const sizeInfo = this._getModelSize(currentModel);
+                if (sizeInfo) {
+                    const sizeLabel = new Gtk.Label({
+                        label: sizeInfo,
+                        css_classes: ['dim-label'],
+                        valign: Gtk.Align.CENTER,
+                    });
+                    statusRow.add_suffix(sizeLabel);
+                }
+            }
+            
+            group.add(statusRow);
 
-        // Add expander for available models
-        const expanderRow = new Adw.ExpanderRow({
-            title: 'Available Models',
-            subtitle: 'Download and select whisper.cpp models',
-        });
+            // Add expander for available models
+            const expanderRow = new Adw.ExpanderRow({
+                title: 'Available Models',
+                subtitle: 'Download and select whisper.cpp models',
+            });
 
-        for (const model of this._availableModels) {
-            const modelRow = this._createModelRow(model, window);
-            expanderRow.add_row(modelRow);
-        }
+            for (const model of this._availableModels) {
+                const modelRow = this._createModelRow(model, window, refreshGroup);
+                expanderRow.add_row(modelRow);
+            }
 
-        group.add(expanderRow);
+            group.add(expanderRow);
 
-        // Model directory info
-        const dirRow = new Adw.ActionRow({
-            title: 'Model Directory',
-            subtitle: this._modelDir,
-        });
+            // Model directory info
+            const dirRow = new Adw.ActionRow({
+                title: 'Model Directory',
+                subtitle: this._modelDir,
+            });
 
-        const openDirButton = new Gtk.Button({
-            icon_name: 'folder-open-symbolic',
-            valign: Gtk.Align.CENTER,
-            tooltip_text: 'Open model directory',
-        });
-        openDirButton.connect('clicked', () => this._openModelDirectory());
-        dirRow.add_suffix(openDirButton);
+            const openDirButton = new Gtk.Button({
+                icon_name: 'folder-open-symbolic',
+                valign: Gtk.Align.CENTER,
+                tooltip_text: 'Open model directory',
+            });
+            openDirButton.connect('clicked', () => this._openModelDirectory());
+            dirRow.add_suffix(openDirButton);
 
-        group.add(dirRow);
+            group.add(dirRow);
+        };
+        
+        // Initial build
+        buildGroupContent();
 
         return group;
     }
@@ -147,7 +164,7 @@ export class WhisperModelManager {
     /**
      * Create a row for each model
      */
-    _createModelRow(model, window) {
+    _createModelRow(model, window, refreshCallback) {
         const isInstalled = this._isModelInstalled(model.file);
         const isCurrent = this._getCurrentModel() === model.file;
         
@@ -181,7 +198,7 @@ export class WhisperModelManager {
                     css_classes: ['suggested-action'],
                 });
                 selectButton.connect('clicked', () => {
-                    this._selectModel(model, window);
+                    this._selectModel(model, window, refreshCallback);
                 });
                 buttonBox.append(selectButton);
             }
@@ -193,7 +210,7 @@ export class WhisperModelManager {
                 css_classes: ['destructive-action'],
             });
             deleteButton.connect('clicked', () => {
-                this._deleteModel(model, window);
+                this._deleteModel(model, window, refreshCallback);
             });
             buttonBox.append(deleteButton);
         } else {
@@ -204,7 +221,7 @@ export class WhisperModelManager {
                 tooltip_text: `Download ${model.name} model`,
             });
             downloadButton.connect('clicked', () => {
-                this._downloadModel(model, window, downloadButton);
+                this._downloadModel(model, window, downloadButton, refreshCallback);
             });
             buttonBox.append(downloadButton);
         }
@@ -313,7 +330,7 @@ export class WhisperModelManager {
     /**
      * Download a model
      */
-    _downloadModel(model, window, button) {
+    _downloadModel(model, window, button, refreshCallback) {
         if (this._downloadInProgress) {
             this._showToast(window, 'Download already in progress');
             return;
@@ -355,7 +372,7 @@ export class WhisperModelManager {
     /**
      * Select a model (save to config and restart service)
      */
-    _selectModel(model, window) {
+    _selectModel(model, window, onComplete) {
         try {
             // Load current config
             const configPath = GLib.get_home_dir() + '/.config/gnome-assistant/config.json';
@@ -392,9 +409,12 @@ export class WhisperModelManager {
             // Restart the service to apply the change
             GLib.spawn_command_line_async('systemctl --user restart gnome-assistant.service');
             
-            // Show notification after a delay
-            GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
+            // Show notification and trigger refresh after a delay
+            GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
                 this._showToast(window, `Now using ${model.name} model`);
+                if (onComplete) {
+                    onComplete();
+                }
                 return GLib.SOURCE_REMOVE;
             });
             
@@ -407,7 +427,7 @@ export class WhisperModelManager {
     /**
      * Delete a model
      */
-    _deleteModel(model, window) {
+    _deleteModel(model, window, refreshCallback) {
         const dialog = new Gtk.MessageDialog({
             modal: true,
             transient_for: window,
@@ -423,6 +443,12 @@ export class WhisperModelManager {
                     const file = Gio.File.new_for_path(`${this._modelDir}/${model.file}`);
                     file.delete(null);
                     this._showToast(window, `${model.name} deleted`);
+                    if (refreshCallback) {
+                        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+                            refreshCallback();
+                            return GLib.SOURCE_REMOVE;
+                        });
+                    }
                 } catch (e) {
                     this._showToast(window, `Failed to delete model: ${e.message}`);
                 }

@@ -9,7 +9,7 @@
   "processing_interval": 1.5,
   
   "_comment_gpu": "Enable GPU acceleration for whisper.cpp inference (requires GPU support)",
-  "gpu_acceleration": false,
+  "gpu_acceleration": true,
   
   "_comment_logging": "Logging configuration",
   "logging": {

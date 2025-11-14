@@ -24,6 +24,13 @@ export class PreferencesBuilder {
     }
 
     /**
+     * Set sync callback for automatic config sync
+     */
+    setSyncCallback(callback) {
+        this._syncCallback = callback;
+    }
+
+    /**
      * Create a switch row
      */
     createSwitchRow(title, subtitle, settingKey, group) {
@@ -38,6 +45,14 @@ export class PreferencesBuilder {
         });
 
         this._settings.bind(settingKey, switchWidget, 'active', Gio.SettingsBindFlags.DEFAULT);
+        
+        // Trigger sync when changed
+        if (this._syncCallback) {
+            this._settings.connect(`changed::${settingKey}`, () => {
+                this._syncCallback();
+            });
+        }
+        
         row.add_suffix(switchWidget);
         group.add(row);
 
@@ -60,6 +75,14 @@ export class PreferencesBuilder {
         });
 
         this._settings.bind(settingKey, entry, 'text', Gio.SettingsBindFlags.DEFAULT);
+        
+        // Trigger sync when changed
+        if (this._syncCallback) {
+            this._settings.connect(`changed::${settingKey}`, () => {
+                this._syncCallback();
+            });
+        }
+        
         row.add_suffix(entry);
         group.add(row);
 
@@ -87,6 +110,14 @@ export class PreferencesBuilder {
         });
 
         this._settings.bind(settingKey, spinButton, 'value', Gio.SettingsBindFlags.DEFAULT);
+        
+        // Trigger sync when changed
+        if (this._syncCallback) {
+            this._settings.connect(`changed::${settingKey}`, () => {
+                this._syncCallback();
+            });
+        }
+        
         row.add_suffix(spinButton);
         group.add(row);
 
@@ -115,6 +146,14 @@ export class PreferencesBuilder {
         });
 
         this._settings.bind(settingKey, spinButton, 'value', Gio.SettingsBindFlags.DEFAULT);
+        
+        // Trigger sync when changed
+        if (this._syncCallback) {
+            this._settings.connect(`changed::${settingKey}`, () => {
+                this._syncCallback();
+            });
+        }
+        
         row.add_suffix(spinButton);
         group.add(row);
 

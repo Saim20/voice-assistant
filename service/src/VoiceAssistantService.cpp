@@ -207,7 +207,7 @@ void VoiceAssistantService::UpdateConfig(const std::string& configJson) {
             log("INFO", "GPU acceleration or model changed, reloading whisper...");
             shutdownWhisper();
             const char* home = std::getenv("HOME");
-            std::string modelPath = std::string(home) + "/.local/share/voice-assistant/models";
+            std::string modelPath = std::string(home) + "/.local/share/gnome-assistant/models";
             if (!initializeWhisper(modelPath)) {
                 log("ERROR", "Failed to reload Whisper model");
                 emitError("Reload Error", "Failed to reload Whisper model with new settings");
@@ -251,7 +251,7 @@ void VoiceAssistantService::SetConfigValue(const std::string& key, const sdbus::
         log("INFO", "Reloading whisper with new settings...");
         shutdownWhisper();
         const char* home = std::getenv("HOME");
-        std::string modelPath = std::string(home) + "/.local/share/voice-assistant/models";
+        std::string modelPath = std::string(home) + "/.local/share/gnome-assistant/models";
         if (!initializeWhisper(modelPath)) {
             log("ERROR", "Failed to reload Whisper model");
             emitError("Reload Error", "Failed to reload Whisper model with new settings");

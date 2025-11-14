@@ -37,7 +37,7 @@ export class ConfigManager {
             this._proxy = new VoiceAssistantProxy(
                 Gio.DBus.session,
                 'com.github.saim.GnomeAssistant',
-                '/com/github/saim/GnomeAssistant'
+                '/com/github/saim/VoiceAssistant'
             );
         } catch (e) {
             console.log(`ConfigManager: Could not connect to D-Bus service: ${e}`);

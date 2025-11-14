@@ -29,6 +29,19 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
         this._modelManager = new WhisperModelManager();
         this._logViewer = new LogViewer();
         
+        // Setup automatic sync with debouncing
+        this._syncTimeout = null;
+        this._prefsBuilder.setSyncCallback(() => {
+            if (this._syncTimeout) {
+                GLib.source_remove(this._syncTimeout);
+            }
+            this._syncTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+                this._configManager.syncSettingsToConfig();
+                this._syncTimeout = null;
+                return GLib.SOURCE_REMOVE;
+            });
+        });
+        
         // Create pages
         this._createGeneralPage(window, settings);
         this._createModelsPage(window, settings);

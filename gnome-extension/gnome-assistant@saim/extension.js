@@ -248,7 +248,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     
     _setupSettingsHandlers() {
         // When settings change, sync to D-Bus service
-        const syncableKeys = ['hotword', 'command-threshold', 'processing-interval'];
+        const syncableKeys = ['hotword', 'command-threshold', 'processing-interval', 'gpu-acceleration'];
         
         syncableKeys.forEach(key => {
             this._settings.connect(`changed::${key}`, () => {
@@ -264,10 +264,12 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             const hotword = this._settings.get_string('hotword');
             const threshold = this._settings.get_double('command-threshold') / 100.0;
             const interval = this._settings.get_double('processing-interval');
+            const gpuAcceleration = this._settings.get_boolean('gpu-acceleration');
             
             this._proxy.SetConfigValueRemote('hotword', new GLib.Variant('s', hotword));
             this._proxy.SetConfigValueRemote('command_threshold', new GLib.Variant('d', threshold));
             this._proxy.SetConfigValueRemote('processing_interval', new GLib.Variant('d', interval));
+            this._proxy.SetConfigValueRemote('gpu_acceleration', new GLib.Variant('b', gpuAcceleration));
             
             console.log('GNOME Assistant: Settings synced to service');
         } catch (e) {
