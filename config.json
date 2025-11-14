@@ -49,6 +49,43 @@
       ]
     },
     {
+      "name": "Spotify",
+      "command": "spotify",
+      "phrases": [
+        "open spotify",
+        "launch spotify",
+        "start spotify",
+        "play music"
+      ]
+    },
+    {
+      "name": "Open Facebook",
+      "command": "firefox https://www.facebook.com",
+      "phrases": [
+        "open facebook",
+        "launch facebook",
+        "go to facebook"
+      ]
+    },
+    {
+      "name": "Open YouTube",
+      "command": "firefox https://www.youtube.com",
+      "phrases": [
+        "open youtube",
+        "launch youtube",
+        "go to youtube"
+      ]
+    },
+    {
+      "name": "Open GitHub",
+      "command": "firefox https://github.com",
+      "phrases": [
+        "open github",
+        "launch github",
+        "go to github"
+      ]
+    },
+    {
       "_comment": "===== WINDOW MANAGEMENT WITH YDOTOOL =====",
       "_info_ydotool": "Format: ydotool key <keycode>:<state> where state is 1=press, 0=release",
       "_info_modifiers": "Common modifiers: Ctrl=29, Alt=56, Shift=42, Super=125",
@@ -61,24 +98,44 @@
       "_breakdown": "125:1 = Press Super, 125:0 = Release Super"
     },
     {
-      "name": "Move Left Workspace",
+      "name": "Go To Left Workspace",
       "command": "ydotool key 125:1 30:1 30:0 125:0",
       "phrases": [
-        "move left",
         "go left",
         "left desktop"
       ],
       "_breakdown": "Super+A: 125:1 (press Super), 30:1 (press A), 30:0 (release A), 125:0 (release Super)"
     },
     {
-      "name": "Move Right Workspace",
+      "name": "Go To Right Workspace",
       "command": "ydotool key 125:1 32:1 32:0 125:0",
       "phrases": [
-        "move right",
         "go right",
         "right desktop"
       ],
       "_breakdown": "Super+D: 125=Super, 32=D"
+    },
+    {
+      "name": "Move Window Left",
+      "command": "ydotool key 125:1 42:1 30:1 30:0 42:0 125:0",
+      "phrases": [
+        "move window left",
+        "move left",
+        "window left",
+        "tile left"
+      ],
+      "_breakdown": "Super+Shift+A: 125=Super, 42=Shift, 30=A"
+    },
+    {
+      "name": "Move Window Right",
+      "command": "ydotool key 125:1 42:1 32:1 32:0 42:0 125:0",
+      "phrases": [
+        "move window right",
+        "move right",
+        "window right",
+        "tile right"
+      ],
+      "_breakdown": "Super+Shift+D: 125=Super, 42=Shift, 32=D"
     },
     {
       "name": "Switch Window",
@@ -181,6 +238,17 @@
         "stop listening",
         "normal mode",
         "go back"
+      ]
+    },
+    {
+      "_comment": "===== SYSTEM MAINTENANCE =====",
+      "name": "System Update",
+      "command": "kgx -e 'yay -Syu'",
+      "phrases": [
+        "system update",
+        "update system",
+        "system upgrade",
+        "run updates"
       ]
     }
   ],
