@@ -6,12 +6,12 @@ After=graphical-session.target
 [Service]
 Type=dbus
 BusName=com.github.saim.GnomeAssistant
-ExecStart=%h/.local/bin/gnome-assistant-service
+ExecStart=/usr/bin/gnome-assistant-service
 Restart=on-failure
 RestartSec=5
 
 # Environment
-Environment="PATH=%h/.local/bin:/usr/local/bin:/usr/bin"
+Environment="PATH=/usr/bin"
 Environment="DISPLAY=:0"
 Environment="WAYLAND_DISPLAY=wayland-0"
 Environment="XDG_RUNTIME_DIR=/run/user/%U"

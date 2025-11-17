@@ -1,4 +1,4 @@
-# Maintainer: Saim <saim20@example.com>
+# Maintainer: Saim <saim20 at github dot com>
 pkgname=gnome-assistant
 pkgver=2.0.0
 pkgrel=1
@@ -41,40 +41,40 @@ prepare() {
     
     # Clone whisper.cpp if not present
     if [ ! -d "whisper.cpp" ]; then
-        msg2 "Cloning whisper.cpp..."
+        printf "Cloning whisper.cpp...\n"
         git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git whisper.cpp
     fi
     
     # Validate whisper.cpp
     if [ ! -f "whisper.cpp/CMakeLists.txt" ]; then
-        error "Failed to clone whisper.cpp properly"
+        printf "ERROR: Failed to clone whisper.cpp properly\n" >&2
         return 1
     fi
     
     # Display build configuration
-    msg2 "==================================================================="
-    msg2 "Build configuration:"
-    msg2 "  CUDA support: $([ $_enable_cuda -eq 1 ] && echo 'enabled' || echo 'disabled')"
-    msg2 "  Vulkan support: $([ $_enable_vulkan -eq 1 ] && echo 'enabled' || echo 'disabled')"
-    msg2 "==================================================================="
-    msg2 ""
-    msg2 "To enable GPU acceleration:"
-    msg2 "  CUDA: export ENABLE_CUDA=1 before running makepkg"
-    msg2 "  Vulkan: export ENABLE_VULKAN=1 before running makepkg"
-    msg2 "==================================================================="
+    printf "===================================================================\n"
+    printf "Build configuration:\n"
+    printf "  CUDA support: %s\n" "$([ $_enable_cuda -eq 1 ] && echo 'enabled' || echo 'disabled')"
+    printf "  Vulkan support: %s\n" "$([ $_enable_vulkan -eq 1 ] && echo 'enabled' || echo 'disabled')"
+    printf "===================================================================\n"
+    printf "\n"
+    printf "To enable GPU acceleration:\n"
+    printf "  CUDA: export ENABLE_CUDA=1 before running makepkg\n"
+    printf "  Vulkan: export ENABLE_VULKAN=1 before running makepkg\n"
+    printf "===================================================================\n"
     
     # Check dependencies if GPU acceleration is requested
     if [ $_enable_cuda -eq 1 ]; then
         if ! command -v nvcc &> /dev/null && [ ! -d "/opt/cuda" ]; then
-            warning "CUDA support requested but CUDA toolkit not found."
-            warning "Install CUDA: sudo pacman -S cuda (or cuda from AUR)"
+            printf "WARNING: CUDA support requested but CUDA toolkit not found.\n" >&2
+            printf "WARNING: Install CUDA: sudo pacman -S cuda (or cuda from AUR)\n" >&2
         fi
     fi
     
     if [ $_enable_vulkan -eq 1 ]; then
         if ! pacman -Qi vulkan-headers &> /dev/null; then
-            warning "Vulkan support requested but vulkan-headers not installed."
-            warning "Install Vulkan: sudo pacman -S vulkan-headers vulkan-icd-loader"
+            printf "WARNING: Vulkan support requested but vulkan-headers not installed.\n" >&2
+            printf "WARNING: Install Vulkan: sudo pacman -S vulkan-headers vulkan-icd-loader\n" >&2
         fi
     fi
 }
@@ -84,18 +84,18 @@ build() {
     
     # Validate whisper.cpp was cloned
     if [ ! -d "whisper.cpp" ] || [ ! -f "whisper.cpp/CMakeLists.txt" ]; then
-        error "whisper.cpp not found or incomplete. Run prepare() first."
+        printf "ERROR: whisper.cpp not found or incomplete. Run prepare() first.\n" >&2
         return 1
     fi
     
     # Build whisper.cpp first
-    msg2 "Building whisper.cpp..."
+    printf "Building whisper.cpp...\n"
     cd whisper.cpp
     
     local cmake_opts="-DCMAKE_BUILD_TYPE=Release"
     
     if [ $_enable_cuda -eq 1 ]; then
-        msg2 "Configuring whisper.cpp with CUDA support..."
+        printf "Configuring whisper.cpp with CUDA support...\n"
         cmake_opts="$cmake_opts -DGGML_CUDA=ON"
         if [ -d "/opt/cuda" ]; then
             cmake_opts="$cmake_opts -DCUDAToolkit_ROOT=/opt/cuda"
@@ -103,7 +103,7 @@ build() {
     fi
     
     if [ $_enable_vulkan -eq 1 ]; then
-        msg2 "Configuring whisper.cpp with Vulkan support..."
+        printf "Configuring whisper.cpp with Vulkan support...\n"
         cmake_opts="$cmake_opts -DGGML_VULKAN=ON"
     fi
     
@@ -112,7 +112,7 @@ build() {
     cd ..
     
     # Build the service
-    msg2 "Building GNOME Assistant service..."
+    printf "Building GNOME Assistant service...\n"
     cd service
     
     cmake_opts="-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DWHISPER_CPP_DIR=$srcdir/$pkgname/whisper.cpp"
