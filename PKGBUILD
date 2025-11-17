@@ -217,9 +217,6 @@ package() {
     
     # Install documentation
     install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
-    install -Dm644 GETTING_STARTED.md "$pkgdir/usr/share/doc/$pkgname/GETTING_STARTED.md"
-    install -Dm644 QUICKSTART_AUR.md "$pkgdir/usr/share/doc/$pkgname/QUICKSTART_AUR.md"
-    install -Dm644 AUR_PACKAGING.md "$pkgdir/usr/share/doc/$pkgname/AUR_PACKAGING.md"
     install -Dm644 docs/GPU_ACCELERATION.md "$pkgdir/usr/share/doc/$pkgname/GPU_ACCELERATION.md"
     
     # Install LICENSE

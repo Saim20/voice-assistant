@@ -35,10 +35,24 @@ Control your GNOME desktop with voice commands:
 git clone https://github.com/Saim20/gnome-assistant.git
 cd gnome-assistant
 makepkg -si
-gnome-assistant-download-model
 ```
 
-See [QUICKSTART_AUR.md](QUICKSTART_AUR.md) for more details.
+**After installation, complete these steps from your GNOME desktop:**
+
+```bash
+# 1. Enable the extension
+gnome-extensions enable gnome-assistant@saim
+
+# 2. Start the service
+systemctl --user start gnome-assistant.service
+
+# 3. Enable ydotool for keyboard commands
+sudo systemctl enable --now ydotool
+sudo usermod -aG input $USER
+# Log out and back in for group changes
+```
+
+> **⚠️ Important:** If you installed via SSH, you must run steps 1-2 from a GNOME graphical session. The service requires D-Bus which is only available in an active GNOME session.
 
 ### Other Linux Distributions
 
@@ -55,20 +69,7 @@ sudo apt install cmake g++ libsdbus-c++-dev libjsoncpp-dev libpulse-dev git ydot
 sudo pacman -S cmake gcc sdbus-cpp jsoncpp libpulse git ydotool
 ```
 
-**Step 2: Enable ydotool**
-
-```bash
-# Start the ydotool daemon
-sudo systemctl enable --now ydotool
-
-# OR for user service (Fedora 40+)
-systemctl --user enable --now ydotoold
-
-# Add yourself to input group if needed
-sudo usermod -aG input $USER
-```
-
-**Step 3: Build and Install**
+**Step 2: Build and Install**
 
 ```bash
 git clone https://github.com/Saim20/gnome-assistant.git
@@ -77,7 +78,7 @@ cd gnome-assistant
 ./install.sh
 ```
 
-**Step 4: Enable and Start**
+**Step 3: Complete Setup (from GNOME desktop, not SSH)**
 
 ```bash
 # Enable the extension
@@ -86,9 +87,16 @@ gnome-extensions enable gnome-assistant@saim
 # Start the service
 systemctl --user start gnome-assistant.service
 
+# Enable ydotool
+sudo systemctl enable --now ydotool
+sudo usermod -aG input $USER
+# Log out and back in
+
 # Verify it's running
 systemctl --user status gnome-assistant.service
 ```
+
+> **⚠️ Important:** Steps must be run from an active GNOME session, not SSH or TTY, as the service requires D-Bus session bus.
 
 ## Getting Started
 
@@ -155,6 +163,24 @@ You can add any command or keyboard shortcut in Preferences. The extension inclu
 
 
 ## Troubleshooting
+
+**Installation error: "Failed to connect to user scope bus"**
+
+This happens when installing from SSH or a non-graphical terminal. The service requires a GNOME session to be running.
+
+**Solution:** Log into your GNOME desktop, then:
+```bash
+# Start the service from your graphical session
+systemctl --user start gnome-assistant.service
+
+# Verify it's running
+systemctl --user status gnome-assistant.service
+```
+
+The extension should now work. You can also start the service automatically on next login:
+```bash
+systemctl --user enable gnome-assistant.service
+```
 
 **Service won't start:**
 ```bash
