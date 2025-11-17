@@ -23,6 +23,7 @@ optdepends=(
     'vulkan-icd-loader: for Vulkan GPU acceleration (AMD/Intel/NVIDIA)'
     'vulkan-headers: for Vulkan GPU acceleration build support'
 )
+options=('!debug')
 install=gnome-assistant.install
 source=("gnome-assistant::git+https://github.com/Saim20/gnome-assistant.git")
 sha256sums=('SKIP')
@@ -38,6 +39,61 @@ _enable_vulkan=${ENABLE_VULKAN}
 
 prepare() {
     cd "$srcdir/$pkgname"
+    
+    # Interactive GPU acceleration setup (only if not already set)
+    if [ -z "${ENABLE_CUDA+x}" ] && [ -z "${ENABLE_VULKAN+x}" ]; then
+        printf "\n"
+        printf "===================================================================\n"
+        printf "GPU Acceleration Options\n"
+        printf "===================================================================\n"
+        printf "\n"
+        
+        # Check for CUDA
+        if command -v nvcc &> /dev/null || [ -d "/opt/cuda" ]; then
+            printf "NVIDIA CUDA detected. Enable CUDA acceleration? [y/N] "
+            read -r response
+            if [[ "$response" =~ ^[Yy]$ ]]; then
+                export ENABLE_CUDA=1
+                _enable_cuda=1
+                printf "✓ CUDA enabled\n"
+            else
+                export ENABLE_CUDA=0
+                _enable_cuda=0
+                printf "CUDA disabled\n"
+            fi
+        else
+            printf "CUDA toolkit not detected. Skipping CUDA.\n"
+            export ENABLE_CUDA=0
+            _enable_cuda=0
+        fi
+        
+        printf "\n"
+        
+        # Check for Vulkan
+        if pacman -Qi vulkan-headers &> /dev/null; then
+            printf "Vulkan SDK detected. Enable Vulkan acceleration? [y/N] "
+            read -r response
+            if [[ "$response" =~ ^[Yy]$ ]]; then
+                export ENABLE_VULKAN=1
+                _enable_vulkan=1
+                printf "✓ Vulkan enabled\n"
+            else
+                export ENABLE_VULKAN=0
+                _enable_vulkan=0
+                printf "Vulkan disabled\n"
+            fi
+        else
+            printf "Vulkan SDK not detected. Skipping Vulkan.\n"
+            printf "(Install with: sudo pacman -S vulkan-headers vulkan-icd-loader)\n"
+            export ENABLE_VULKAN=0
+            _enable_vulkan=0
+        fi
+        
+        printf "\n"
+        printf "Tip: Set ENABLE_CUDA=1 or ENABLE_VULKAN=1 before makepkg to skip prompts\n"
+        printf "===================================================================\n"
+        printf "\n"
+    fi
     
     # Clone whisper.cpp if not present
     if [ ! -d "whisper.cpp" ]; then
