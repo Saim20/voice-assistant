@@ -238,7 +238,7 @@ export class ConfigManager {
             "gpu_acceleration": false,
             "logging": {
                 "level": "INFO",
-                "file": "/tmp/voice_assistant.log"
+                "file": "/tmp/gnome_assistant.log"
             },
             "commands": [],
             "typing_mode": {

@@ -19,26 +19,37 @@ DEPS_OK=true
 
 # Check for CMake
 if ! command -v cmake &> /dev/null; then
-    echo "ERROR: cmake not found. Install with: sudo dnf install cmake"
+    echo "ERROR: cmake not found."
+    echo "  Fedora/RHEL: sudo dnf install cmake"
+    echo "  Arch: sudo pacman -S cmake"
+    echo "  Ubuntu/Debian: sudo apt install cmake"
     DEPS_OK=false
 fi
 
 # Check for sdbus-c++
 if ! pkg-config --exists sdbus-c++; then
-    echo "ERROR: sdbus-c++ not found. Install with: sudo dnf install sdbus-c++-devel"
+    echo "ERROR: sdbus-c++ not found."
+    echo "  Fedora/RHEL: sudo dnf install sdbus-c++-devel"
+    echo "  Arch: sudo pacman -S sdbus-cpp"
+    echo "  Ubuntu/Debian: sudo apt install libsdbus-c++-dev"
     DEPS_OK=false
 fi
 
 # Check for jsoncpp
 if ! pkg-config --exists jsoncpp; then
-    echo "ERROR: jsoncpp not found. Install with: sudo dnf install jsoncpp-devel"
+    echo "ERROR: jsoncpp not found."
+    echo "  Fedora/RHEL: sudo dnf install jsoncpp-devel"
+    echo "  Arch: sudo pacman -S jsoncpp"
+    echo "  Ubuntu/Debian: sudo apt install libjsoncpp-dev"
     DEPS_OK=false
 fi
 
 # Check for PulseAudio
 if ! pkg-config --exists libpulse-simple; then
     echo "WARNING: libpulse-simple not found. Audio capture may not work."
-    echo "Install with: sudo dnf install pulseaudio-libs-devel"
+    echo "  Fedora/RHEL: sudo dnf install pulseaudio-libs-devel"
+    echo "  Arch: sudo pacman -S libpulse"
+    echo "  Ubuntu/Debian: sudo apt install libpulse-dev"
 fi
 
 if [ "$DEPS_OK" = false ]; then
@@ -53,12 +64,18 @@ echo
 # Check for whisper.cpp
 if [ ! -d "$PROJECT_DIR/whisper.cpp" ]; then
     echo "Whisper.cpp not found. Cloning..."
-    git clone https://github.com/ggerganov/whisper.cpp.git "$PROJECT_DIR/whisper.cpp"
+    git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git "$PROJECT_DIR/whisper.cpp"
     echo
 fi
 
+# Validate whisper.cpp
+if [ ! -f "$PROJECT_DIR/whisper.cpp/CMakeLists.txt" ]; then
+    echo "ERROR: whisper.cpp clone incomplete or corrupted"
+    exit 1
+fi
+
 # Download whisper model if needed
-MODEL_DIR="$HOME/.local/share/voice-assistant/models"
+MODEL_DIR="$HOME/.local/share/gnome-assistant/models"
 MODEL_FILE="$MODEL_DIR/ggml-tiny.en.bin"
 
 if [ ! -f "$MODEL_FILE" ]; then

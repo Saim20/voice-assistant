@@ -10,6 +10,9 @@ cd gnome-assistant
 # Build and install
 makepkg -si
 
+# Download whisper model (tiny.en recommended)
+gnome-assistant-download-model
+
 # Setup
 mkdir -p ~/.config/gnome-assistant
 cp /usr/share/gnome-assistant/config.json ~/.config/gnome-assistant/

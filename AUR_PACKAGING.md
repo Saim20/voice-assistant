@@ -1,314 +1,285 @@
-# AUR Packaging Guide for GNOME Assistant
+# AUR Package Submission Guide
 
-This guide explains the AUR (Arch User Repository) packaging for GNOME Assistant.
+## Pre-Submission Checklist
 
-## Files Overview
+### 1. Test Package Build
 
-- `PKGBUILD` - Main package build script for stable releases
-- `PKGBUILD-git` - Development version (tracks git master)
-- `gnome-assistant.install` - Post-install, upgrade, and removal scripts
-- `AUR_README.md` - User-facing installation instructions
-- `build-aur.sh` - Interactive build helper script
-- `SRCINFO_HOWTO.md` - Instructions for generating .SRCINFO
-
-## Package Variants
-
-### gnome-assistant (Stable)
-
-The main package that tracks tagged releases.
-
-**Source:** `PKGBUILD`
-
-**Installation:**
 ```bash
-git clone https://aur.archlinux.org/gnome-assistant.git
-cd gnome-assistant
+# Test in clean environment with clean chroot
+mkdir -p ~/aur-testing
+cd ~/aur-testing
+
+# Install devtools
+sudo pacman -S devtools
+
+# Create clean chroot
+mkarchroot $HOME/chroot/root base-devel
+
+# Test build
+makechrootpkg -c -r $HOME/chroot
+
+# Or test locally
 makepkg -si
 ```
 
-### gnome-assistant-git (Development)
+### 2. Verify Package Contents
 
-Tracks the latest git master branch for testing new features.
-
-**Source:** `PKGBUILD-git`
-
-**Installation:**
 ```bash
-git clone https://aur.archlinux.org/gnome-assistant-git.git
-cd gnome-assistant-git
-makepkg -si
+# List package contents
+tar -tzf gnome-assistant-*.pkg.tar.zst
+
+# Should include:
+# - /usr/bin/gnome-assistant-service
+# - /usr/bin/gnome-assistant-download-model
+# - /usr/lib/systemd/user/gnome-assistant.service
+# - /usr/share/dbus-1/services/com.github.saim.GnomeAssistant.service
+# - /usr/share/dbus-1/interfaces/com.github.saim.GnomeAssistant.xml
+# - /usr/share/gnome-shell/extensions/gnome-assistant@saim/
+# - /usr/share/gnome-assistant/config.json
+# - /usr/share/doc/gnome-assistant/
+# - /usr/share/licenses/gnome-assistant/LICENSE
 ```
 
-## GPU Acceleration Support
-
-Both PKGBUILDs support optional GPU acceleration through build-time configuration.
-
-### Method 1: Environment Variables (Recommended)
+### 3. Generate .SRCINFO
 
 ```bash
-# CUDA only
-ENABLE_CUDA=1 makepkg -si
+# Generate .SRCINFO for AUR
+makepkg --printsrcinfo > .SRCINFO
 
-# Vulkan only
-ENABLE_VULKAN=1 makepkg -si
-
-# Both
-ENABLE_CUDA=1 ENABLE_VULKAN=1 makepkg -si
+# Verify it contains:
+# - pkgname
+# - pkgver
+# - pkgrel
+# - pkgdesc
+# - arch
+# - url
+# - license
+# - depends
+# - makedepends
+# - optdepends
 ```
 
-### Method 2: Interactive Helper Script
+### 4. Test Installation Flow
 
 ```bash
-./build-aur.sh
-```
+# Install package
+sudo pacman -U gnome-assistant-*.pkg.tar.zst
 
-The script will:
-1. Detect available GPU toolkits
-2. Ask user preferences
-3. Build with selected options
+# Download model
+gnome-assistant-download-model
 
-### Method 3: Edit PKGBUILD
+# Copy config
+mkdir -p ~/.config/gnome-assistant
+cp /usr/share/gnome-assistant/config.json ~/.config/gnome-assistant/
 
-Edit the PKGBUILD and modify these lines:
+# Enable extension
+gnome-extensions enable gnome-assistant@saim
 
-```bash
-: ${ENABLE_CUDA:=1}      # Change 0 to 1 for CUDA
-: ${ENABLE_VULKAN:=1}    # Change 0 to 1 for Vulkan
-```
-
-Then build normally: `makepkg -si`
-
-## Dependencies
-
-### Required (Runtime)
-- `gnome-shell>=45` - GNOME Shell 45 or newer
-- `sdbus-cpp` - D-Bus C++ bindings
-- `jsoncpp` - JSON parsing library
-- `libpulse` - PulseAudio client library
-- `ydotool` - Wayland input simulation
-
-### Required (Build)
-- `cmake` - Build system
-- `git` - Version control (for cloning whisper.cpp)
-- `gcc` - C/C++ compiler
-
-### Optional (GPU Acceleration)
-- `cuda` - NVIDIA CUDA toolkit (for CUDA support)
-- `vulkan-icd-loader` - Vulkan runtime (for Vulkan support)
-- `vulkan-headers` - Vulkan development headers (for building with Vulkan)
-
-## Build Process
-
-### 1. Prepare Phase
-
-- Clones whisper.cpp repository
-- Displays build configuration
-- Checks for GPU toolkit dependencies
-- Shows warnings if GPU support requested but toolkit not found
-
-### 2. Build Phase
-
-**Whisper.cpp:**
-- Downloads tiny.en model (~75MB) to `~/.local/share/voice-assistant/models/`
-- Configures with selected GPU backend(s)
-- Builds whisper.cpp library
-
-**GNOME Assistant Service:**
-- Links against whisper.cpp
-- Configures with matching GPU settings
-- Builds the C++ D-Bus service
-
-### 3. Package Phase
-
-Installs:
-- `/usr/bin/gnome-assistant-service` - Main service binary
-- `/usr/lib/systemd/user/gnome-assistant.service` - Systemd user service
-- `/usr/share/gnome-shell/extensions/gnome-assistant@saim/` - GNOME extension
-- `/usr/share/dbus-1/services/` - D-Bus service file
-- `/usr/share/dbus-1/interfaces/` - D-Bus interface definition
-- `/usr/share/gnome-assistant/config.json` - Default configuration
-- `/usr/share/doc/gnome-assistant/` - Documentation
-
-## Post-Install Scripts
-
-The `gnome-assistant.install` file provides:
-
-### post_install()
-- Displays setup instructions
-- Guides user through:
-  - Configuration file setup
-  - Extension enablement
-  - Service activation
-  - ydotool configuration
-
-### post_upgrade()
-- Reminds user to restart service after upgrade
-
-### pre_remove()
-- Stops and disables the service
-- Prevents service errors during removal
-
-### post_remove()
-- Explains how to clean up user data
-- Lists configuration and model directories
-
-## Testing the Package
-
-### Local Testing
-
-```bash
-# Build only (don't install)
-makepkg
-
-# Build and install
-makepkg -si
-
-# Clean build
-makepkg -C && makepkg -si
-```
-
-### Verify Installation
-
-```bash
-# Check service binary
-ls -l /usr/bin/gnome-assistant-service
-
-# Check extension
-gnome-extensions list | grep gnome-assistant
-
-# Check service file
-systemctl --user cat gnome-assistant.service
-
-# Check for GPU libraries (if built with GPU support)
-ldd /usr/bin/gnome-assistant-service | grep -i cuda
-ldd /usr/bin/gnome-assistant-service | grep -i vulkan
-```
-
-### Test Functionality
-
-```bash
 # Start service
-systemctl --user start gnome-assistant.service
+systemctl --user enable --now gnome-assistant.service
 
 # Check status
 systemctl --user status gnome-assistant.service
 
-# View logs
-journalctl --user -u gnome-assistant.service -f
-
-# Enable extension
-gnome-extensions enable gnome-assistant@saim
+# Test functionality
+gdbus call --session \
+  --dest com.github.saim.GnomeAssistant \
+  --object-path /com/github/saim/GnomeAssistant \
+  --method com.github.saim.GnomeAssistant.GetStatus
 ```
 
-## Publishing to AUR
-
-### Initial Submission
-
-1. Create AUR account at https://aur.archlinux.org
-2. Add SSH key to AUR account
-3. Clone AUR repository:
-   ```bash
-   git clone ssh://aur@aur.archlinux.org/gnome-assistant.git
-   cd gnome-assistant
-   ```
-4. Copy files:
-   ```bash
-   cp /path/to/PKGBUILD .
-   cp /path/to/gnome-assistant.install .
-   ```
-5. Generate .SRCINFO:
-   ```bash
-   makepkg --printsrcinfo > .SRCINFO
-   ```
-6. Commit and push:
-   ```bash
-   git add PKGBUILD gnome-assistant.install .SRCINFO
-   git commit -m "Initial import: gnome-assistant 2.0.0"
-   git push
-   ```
-
-### Updates
-
-1. Update PKGBUILD (increment pkgver or pkgrel)
-2. Update .SRCINFO: `makepkg --printsrcinfo > .SRCINFO`
-3. Test build: `makepkg -si`
-4. Commit and push:
-   ```bash
-   git add PKGBUILD .SRCINFO
-   git commit -m "Update to version X.Y.Z"
-   git push
-   ```
-
-### Both Packages
-
-Maintain both `gnome-assistant` and `gnome-assistant-git`:
+### 5. Test Uninstallation
 
 ```bash
-# For stable package
-git clone ssh://aur@aur.archlinux.org/gnome-assistant.git
+# Stop service
+systemctl --user stop gnome-assistant.service
+systemctl --user disable gnome-assistant.service
 
-# For git package
-git clone ssh://aur@aur.archlinux.org/gnome-assistant-git.git
+# Disable extension
+gnome-extensions disable gnome-assistant@saim
+
+# Uninstall
+sudo pacman -R gnome-assistant
+
+# Verify removal
+ls /usr/bin/gnome-assistant* 2>/dev/null
+ls /usr/share/gnome-shell/extensions/gnome-assistant@saim 2>/dev/null
 ```
 
-Use `PKGBUILD` for stable, `PKGBUILD-git` for development.
+## AUR Submission
 
-## Troubleshooting
+### Initial Upload
 
-### Build Failures
+```bash
+# Clone AUR repository
+git clone ssh://aur@aur.archlinux.org/gnome-assistant.git aur-gnome-assistant
+cd aur-gnome-assistant
 
-**Issue: Whisper.cpp fails to build with CUDA**
-- Ensure CUDA toolkit is installed: `pacman -S cuda`
-- Check CUDA path: `ls -l /opt/cuda`
+# Copy files
+cp ../gnome-assistant/PKGBUILD .
+cp ../gnome-assistant/gnome-assistant.install .
+cp ../gnome-assistant/.SRCINFO .
 
-**Issue: Vulkan not found**
-- Install headers: `pacman -S vulkan-headers`
-- Verify: `ls /usr/include/vulkan/vulkan.h`
+# Commit
+git add PKGBUILD gnome-assistant.install .SRCINFO
+git commit -m "Initial import of gnome-assistant"
 
-**Issue: Missing dependencies**
-- Install build deps: `pacman -S cmake gcc git`
-- Install runtime deps: `pacman -S sdbus-cpp jsoncpp libpulse ydotool`
+# Push to AUR
+git push
+```
 
-### Installation Issues
+### Update Package
 
-**Issue: Extension not found after install**
-- Reinstall: `pacman -R gnome-assistant && pacman -S gnome-assistant`
-- Check path: `ls /usr/share/gnome-shell/extensions/gnome-assistant@saim`
+```bash
+cd aur-gnome-assistant
 
-**Issue: Service won't start**
-- Check model: `ls ~/.local/share/voice-assistant/models/ggml-tiny.en.bin`
-- View errors: `journalctl --user -u gnome-assistant.service`
+# Update PKGBUILD (increment pkgver or pkgrel)
+vim PKGBUILD
+
+# Regenerate .SRCINFO
+makepkg --printsrcinfo > .SRCINFO
+
+# Test build
+makepkg -si
+
+# Commit and push
+git add PKGBUILD .SRCINFO
+git commit -m "Update to version X.Y.Z"
+git push
+```
+
+## Git Version (-git package)
+
+For the development version:
+
+```bash
+# Clone git AUR repository
+git clone ssh://aur@aur.archlinux.org/gnome-assistant-git.git aur-gnome-assistant-git
+cd aur-gnome-assistant-git
+
+# Copy git PKGBUILD
+cp ../gnome-assistant/PKGBUILD-git PKGBUILD
+cp ../gnome-assistant/gnome-assistant.install .
+
+# Generate .SRCINFO
+makepkg --printsrcinfo > .SRCINFO
+
+# Commit and push
+git add PKGBUILD gnome-assistant.install .SRCINFO
+git commit -m "Initial import of gnome-assistant-git"
+git push
+```
+
+## Package Metadata
+
+### PKGBUILD Header
+
+```bash
+# Maintainer: Saim <your-email@example.com>
+pkgname=gnome-assistant
+pkgver=2.0.0
+pkgrel=1
+pkgdesc="Advanced voice control for GNOME Shell with whisper.cpp offline speech recognition"
+arch=('x86_64')
+url="https://github.com/Saim20/gnome-assistant"
+license=('MIT')
+```
+
+### Dependencies Explanation
+
+**Runtime dependencies (depends):**
+- `gnome-shell>=45` - Requires GNOME Shell 45 or newer
+- `sdbus-cpp` - C++ D-Bus library for IPC
+- `jsoncpp` - JSON parsing for configuration
+- `libpulse` - Audio capture from microphone
+- `ydotool` - Wayland input simulation for commands
+
+**Build dependencies (makedepends):**
+- `cmake` - Build system
+- `git` - Clone whisper.cpp submodule
+- `gcc` - C++ compiler
+
+**Optional dependencies (optdepends):**
+- `cuda` - NVIDIA GPU acceleration (if built with ENABLE_CUDA=1)
+- `vulkan-icd-loader` - AMD/Intel GPU acceleration (if built with ENABLE_VULKAN=1)
+- `vulkan-headers` - Vulkan build support
+
+## Common Issues
+
+### Build fails in clean chroot
+
+**Problem**: Can't access $HOME to download model
+
+**Solution**: Removed model download from build() - now done post-install
+
+### Schema compilation fails
+
+**Problem**: `glib-compile-schemas` returns error
+
+**Solution**: Check if schemas directory exists before compiling
+
+### Extension not loading
+
+**Problem**: Extension directory permissions wrong
+
+**Solution**: Ensure `install -dm755` for proper permissions
+
+### Service won't start
+
+**Problem**: Missing model file
+
+**Solution**: User must run `gnome-assistant-download-model` post-install
+
+## Validation Commands
+
+```bash
+# Check package for common issues
+namcap gnome-assistant-*.pkg.tar.zst
+
+# Check PKGBUILD
+namcap PKGBUILD
+
+# Check dependencies
+ldd /usr/bin/gnome-assistant-service
+
+# Verify service file
+systemd-analyze verify --user gnome-assistant.service
+
+# Check D-Bus interface
+gdbus introspect --session \
+  --dest com.github.saim.GnomeAssistant \
+  --object-path /com/github/saim/GnomeAssistant
+```
+
+## Package Signing
+
+```bash
+# Generate GPG key if needed
+gpg --full-gen-key
+
+# Sign package
+gpg --detach-sign gnome-assistant-*.pkg.tar.zst
+
+# Add signature to PKGBUILD (optional)
+source=("gnome-assistant::git+https://github.com/Saim20/gnome-assistant.git")
+sha256sums=('SKIP')
+validpgpkeys=('YOUR_GPG_KEY_ID')
+```
 
 ## Best Practices
 
-1. **Version Management**
-   - Keep pkgver in sync with upstream releases
-   - Increment pkgrel for packaging-only changes
-   - Reset pkgrel to 1 when pkgver changes
-
-2. **Dependency Management**
-   - Keep depends= minimal (only runtime requirements)
-   - Use optdepends= for optional features
-   - Put build-only tools in makedepends=
-
-3. **GPU Support**
-   - Default to CPU-only (most users)
-   - Make GPU support opt-in via environment variables
-   - Document GPU options clearly
-
-4. **Testing**
-   - Always test in a clean chroot
-   - Test both with and without GPU support
-   - Verify post-install instructions work
-
-5. **Documentation**
-   - Keep AUR_README.md updated
-   - Include GPU build instructions
-   - Document troubleshooting steps
+1. **Version Updates**: Increment `pkgrel` for PKGBUILD changes, `pkgver` for upstream updates
+2. **Testing**: Always test in clean chroot before pushing to AUR
+3. **Documentation**: Keep .SRCINFO in sync with PKGBUILD
+4. **Dependencies**: Only include necessary runtime dependencies
+5. **Cleanup**: Remove build artifacts before packaging
+6. **Post-install**: Use .install file for user instructions
+7. **Licenses**: Always include LICENSE file
+8. **Conflicts**: Ensure -git package conflicts with stable package
 
 ## Resources
 
-- AUR Guidelines: https://wiki.archlinux.org/title/AUR_submission_guidelines
-- PKGBUILD Reference: https://wiki.archlinux.org/title/PKGBUILD
-- Arch Packaging Standards: https://wiki.archlinux.org/title/Arch_package_guidelines
-- AUR Helpers: https://wiki.archlinux.org/title/AUR_helpers
+- [AUR Submission Guidelines](https://wiki.archlinux.org/title/AUR_submission_guidelines)
+- [PKGBUILD Guide](https://wiki.archlinux.org/title/PKGBUILD)
+- [Creating Packages](https://wiki.archlinux.org/title/Creating_packages)
+- [AUR Helper](https://wiki.archlinux.org/title/AUR_helpers)

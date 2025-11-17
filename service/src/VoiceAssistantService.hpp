@@ -85,7 +85,7 @@ private:
 
     // Command processing
     void processTranscription(const std::string& text);
-    void executeCommand(const Command& cmd, double confidence);
+    void executeCommand(const Command& cmd, const std::string& text, double confidence);
     double matchPhrase(const std::string& text, const std::string& phrase);
     std::pair<const Command*, double> findBestMatch(const std::string& text);
 
@@ -104,6 +104,7 @@ private:
     void log(const std::string& level, const std::string& message);
     void clearBuffer();
     void updateBuffer(const std::string& text);
+    void typeText(const std::string& text);
 
     // Member variables
     sdbus::IConnection& m_connection;
@@ -163,6 +164,21 @@ private:
     bool isDuplicateTranscription(const std::string& text);
     void addTranscriptionRecord(const std::string& text);
     void cleanOldTranscriptions();
+    
+    // Command execution history (prevents duplicate command execution)
+    struct CommandExecutionRecord {
+        std::string commandName;       // Name of the executed command
+        std::string matchedPhrase;     // The phrase that was matched
+        std::string transcribedText;   // The actual transcribed text
+        double confidence;             // Confidence score
+        std::chrono::steady_clock::time_point timestamp;
+    };
+    std::vector<CommandExecutionRecord> m_commandHistory;
+    std::mutex m_commandHistoryMutex;
+    bool isDuplicateCommand(const Command& cmd, const std::string& text, double confidence);
+    void addCommandExecution(const Command& cmd, const std::string& text, double confidence);
+    void cleanOldCommandHistory();
+    double calculateTextSimilarity(const std::string& text1, const std::string& text2);
 };
 
 } // namespace VoiceAssistant

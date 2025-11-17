@@ -105,9 +105,12 @@ makepkg -si
 # Or with GPU acceleration
 ENABLE_CUDA=1 makepkg -si      # NVIDIA
 ENABLE_VULKAN=1 makepkg -si    # AMD/Intel
+
+# Download whisper model
+gnome-assistant-download-model
 ```
 
-See [AUR.md](AUR.md) for complete AUR installation guide.
+See [QUICKSTART_AUR.md](QUICKSTART_AUR.md) for complete AUR installation guide.
 
 ### Option 2: Manual Build
 

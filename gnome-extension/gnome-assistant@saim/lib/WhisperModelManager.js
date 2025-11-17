@@ -91,74 +91,88 @@ export class WhisperModelManager {
             description: 'Download and manage speech recognition models',
         });
 
-        // Refresh function to rebuild the group
-        const refreshGroup = () => {
-            // Remove all rows from the group properly
-            // We need to remove all AdwActionRow and AdwExpanderRow children
-            while (group.get_first_child()) {
-                group.remove(group.get_first_child());
-            }
-            
-            // Rebuild content
-            buildGroupContent();
-        };
+        // Store references for dynamic updates
+        this._statusRow = null;
+        this._expanderRow = null;
+        this._modelRows = new Map(); // model.file -> row reference
         
-        const buildGroupContent = () => {
-            // Current model status
-            const currentModel = this._getCurrentModel();
-            const statusRow = new Adw.ActionRow({
-                title: 'Current Model',
-                subtitle: currentModel ? `Using ${currentModel}` : 'No model detected',
-            });
-            
-            if (currentModel) {
-                const sizeInfo = this._getModelSize(currentModel);
-                if (sizeInfo) {
-                    const sizeLabel = new Gtk.Label({
-                        label: sizeInfo,
-                        css_classes: ['dim-label'],
-                        valign: Gtk.Align.CENTER,
-                    });
-                    statusRow.add_suffix(sizeLabel);
-                }
-            }
-            
-            group.add(statusRow);
-
-            // Add expander for available models
-            const expanderRow = new Adw.ExpanderRow({
-                title: 'Available Models',
-                subtitle: 'Download and select whisper.cpp models',
-            });
-
-            for (const model of this._availableModels) {
-                const modelRow = this._createModelRow(model, window, refreshGroup);
-                expanderRow.add_row(modelRow);
-            }
-
-            group.add(expanderRow);
-
-            // Model directory info
-            const dirRow = new Adw.ActionRow({
-                title: 'Model Directory',
-                subtitle: this._modelDir,
-            });
-
-            const openDirButton = new Gtk.Button({
-                icon_name: 'folder-open-symbolic',
-                valign: Gtk.Align.CENTER,
-                tooltip_text: 'Open model directory',
-            });
-            openDirButton.connect('clicked', () => this._openModelDirectory());
-            dirRow.add_suffix(openDirButton);
-
-            group.add(dirRow);
-        };
-        
-        // Initial build
-        buildGroupContent();
+        // Build initial content
+        this._buildGroupContent(group, window);
 
         return group;
+    }
+    
+    /**
+     * Build or rebuild the group content
+     */
+    _buildGroupContent(group, window) {
+        // Current model status
+        const currentModel = this._getCurrentModel();
+        this._statusRow = new Adw.ActionRow({
+            title: 'Current Model',
+            subtitle: currentModel ? `Using ${currentModel}` : 'No model detected',
+        });
+        
+        if (currentModel) {
+            const sizeInfo = this._getModelSize(currentModel);
+            if (sizeInfo) {
+                const sizeLabel = new Gtk.Label({
+                    label: sizeInfo,
+                    css_classes: ['dim-label'],
+                    valign: Gtk.Align.CENTER,
+                });
+                this._statusRow.add_suffix(sizeLabel);
+            }
+        }
+        
+        group.add(this._statusRow);
+
+        // Add expander for available models
+        this._expanderRow = new Adw.ExpanderRow({
+            title: 'Available Models',
+            subtitle: 'Download and select whisper.cpp models',
+        });
+
+        this._modelRows.clear();
+        for (const model of this._availableModels) {
+            const modelRow = this._createModelRow(model, window, () => this._refreshUI(group, window));
+            this._expanderRow.add_row(modelRow);
+            this._modelRows.set(model.file, modelRow);
+        }
+
+        group.add(this._expanderRow);
+
+        // Model directory info
+        const dirRow = new Adw.ActionRow({
+            title: 'Model Directory',
+            subtitle: this._modelDir,
+        });
+
+        const openDirButton = new Gtk.Button({
+            icon_name: 'folder-open-symbolic',
+            valign: Gtk.Align.CENTER,
+            tooltip_text: 'Open model directory',
+        });
+        openDirButton.connect('clicked', () => this._openModelDirectory());
+        dirRow.add_suffix(openDirButton);
+
+        group.add(dirRow);
+    }
+    
+    /**
+     * Refresh the UI after model changes
+     */
+    _refreshUI(group, window) {
+        // Remove all children
+        let child = group.get_first_child();
+        while (child) {
+            const next = child.get_next_sibling();
+            group.remove(child);
+            child = next;
+        }
+        
+        // Rebuild content
+        this._buildGroupContent(group, window);
     }
 
     /**
@@ -166,7 +180,8 @@ export class WhisperModelManager {
      */
     _createModelRow(model, window, refreshCallback) {
         const isInstalled = this._isModelInstalled(model.file);
-        const isCurrent = this._getCurrentModel() === model.file;
+        const currentModel = this._getCurrentModel();
+        const isCurrent = currentModel === model.file;
         
         let subtitle = `${model.description} • ${model.size}`;
         if (model.recommended) {
@@ -344,22 +359,31 @@ export class WhisperModelManager {
         GLib.spawn_command_line_sync(`mkdir -p ${this._modelDir}`);
 
         const outputPath = `${this._modelDir}/${model.file}`;
-        const command = `wget -O "${outputPath}" "${model.url}"`;
+        const tempPath = `${outputPath}.tmp`;
+        const command = `wget -O "${tempPath}" "${model.url}" && mv "${tempPath}" "${outputPath}"`;
 
         this._showToast(window, `Downloading ${model.name} model (${model.size})...`);
+
+        // Monitor download completion
+        const checkCompletion = () => {
+            const file = Gio.File.new_for_path(outputPath);
+            if (file.query_exists(null)) {
+                this._downloadInProgress = false;
+                this._showToast(window, `${model.name} downloaded successfully`);
+                if (refreshCallback) {
+                    refreshCallback();
+                }
+                return GLib.SOURCE_REMOVE;
+            }
+            return GLib.SOURCE_CONTINUE;
+        };
 
         // Run download in background
         try {
             GLib.spawn_command_line_async(`sh -c '${command} && notify-send "GNOME Assistant" "Model ${model.name} downloaded successfully"'`);
             
-            // Re-enable button after a delay (the download continues in background)
-            GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 3, () => {
-                this._downloadInProgress = false;
-                button.sensitive = true;
-                button.label = 'Download';
-                this._showToast(window, `Download started for ${model.name}. Check notifications for completion.`);
-                return GLib.SOURCE_REMOVE;
-            });
+            // Poll for completion every 2 seconds
+            GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, checkCompletion);
         } catch (e) {
             console.error('Download error:', e);
             this._downloadInProgress = false;
@@ -406,15 +430,17 @@ export class WhisperModelManager {
             
             this._showToast(window, `Selected ${model.name}. Restarting service...`);
             
+            // Refresh UI immediately to show the new selection
+            if (onComplete) {
+                onComplete();
+            }
+            
             // Restart the service to apply the change
             GLib.spawn_command_line_async('systemctl --user restart gnome-assistant.service');
             
-            // Show notification and trigger refresh after a delay
-            GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
+            // Show notification after a delay
+            GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {
                 this._showToast(window, `Now using ${model.name} model`);
-                if (onComplete) {
-                    onComplete();
-                }
                 return GLib.SOURCE_REMOVE;
             });
             
@@ -444,10 +470,7 @@ export class WhisperModelManager {
                     file.delete(null);
                     this._showToast(window, `${model.name} deleted`);
                     if (refreshCallback) {
-                        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
-                            refreshCallback();
-                            return GLib.SOURCE_REMOVE;
-                        });
+                        refreshCallback();
                     }
                 } catch (e) {
                     this._showToast(window, `Failed to delete model: ${e.message}`);

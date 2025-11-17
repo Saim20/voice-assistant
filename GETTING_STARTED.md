@@ -121,11 +121,11 @@ gnome-extensions enable gnome-assistant@saim
 
 - Explore the **Commands** preferences to add your own commands
 - Try typing mode for dictation: click icon → "Switch to Typing Mode"
-- Monitor the service: `journalctl --user -u voice-assistant.service -f`
+- Monitor the service: `journalctl --user -u gnome-assistant.service -f`
 - Read the full README.md for advanced usage and D-Bus interface details
 
 ## Need Help?
 
-- Check the logs: `/tmp/voice_assistant.log` and `journalctl --user -u gnome-assistant.service`
+- Check the logs: `/tmp/gnome_assistant.log` and `journalctl --user -u gnome-assistant.service`
 - Verify D-Bus connection: `gdbus introspect --session --dest com.github.saim.GnomeAssistant --object-path /com/github/saim/GnomeAssistant`
 - Open an issue on GitHub with log output

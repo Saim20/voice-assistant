@@ -487,7 +487,7 @@ export default class VoiceAssistantExtension extends Extension {
         console.log('GNOME Assistant: Enabling extension');
         const settings = this.getSettings();
         this._indicator = new VoiceAssistantIndicator(settings);
-        Main.panel.addToStatusArea('voice-assistant', this._indicator);
+        Main.panel.addToStatusArea('gnome-assistant', this._indicator);
     }
 
     disable() {

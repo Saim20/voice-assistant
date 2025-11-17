@@ -127,13 +127,13 @@ VoiceAssistantService::VoiceAssistantService(sdbus::IConnection& connection, std
     // Set config path
     const char* home = std::getenv("HOME");
     m_configPath = std::string(home) + "/.config/gnome-assistant/config.json";
-    m_logFile = "/tmp/voice_assistant.log";
+    m_logFile = "/tmp/gnome_assistant.log";
 
     // Load configuration
     loadConfig();
 
     // Initialize whisper with default model path - use tiny model
-    std::string modelPath = std::string(home) + "/.local/share/voice-assistant/models";
+    std::string modelPath = std::string(home) + "/.local/share/gnome-assistant/models";
     if (!initializeWhisper(modelPath)) {
         log("ERROR", "Failed to initialize Whisper model");
         emitError("Initialization Error", "Failed to load Whisper model from: " + modelPath);
@@ -604,16 +604,22 @@ void VoiceAssistantService::audioProcessingLoop() {
                 processTranscription(transcription);
             }
             
-            // Keep the last 1 second of audio for continuity
-            const size_t overlap = WHISPER_SAMPLE_RATE;
-            if (audioBuffer.size() > overlap) {
-                std::vector<float> newBuffer(
-                    audioBuffer.end() - overlap, 
-                    audioBuffer.end()
-                );
-                audioBuffer = std::move(newBuffer);
-            } else {
+            // Keep overlap based on mode - less overlap in typing mode to avoid duplicates
+            if (m_currentMode == Mode::Typing) {
+                // In typing mode, clear buffer completely to avoid any duplicate transcriptions
                 audioBuffer.clear();
+            } else {
+                // In other modes, keep 1 second for better command detection
+                const size_t overlap = WHISPER_SAMPLE_RATE;
+                if (audioBuffer.size() > overlap) {
+                    std::vector<float> newBuffer(
+                        audioBuffer.end() - overlap, 
+                        audioBuffer.end()
+                    );
+                    audioBuffer = std::move(newBuffer);
+                } else {
+                    audioBuffer.clear();
+                }
             }
         }
         
@@ -663,6 +669,12 @@ void VoiceAssistantService::processTranscription(const std::string& text) {
         }
         
         if (bestCmd && confidence >= m_commandThreshold) {
+            // Check for duplicate command execution (from overlapping audio buffers)
+            if (isDuplicateCommand(*bestCmd, text, confidence)) {
+                log("INFO", "Command ignored: Duplicate command detected from overlapping audio");
+                return;
+            }
+            
             // Check debounce - prevent commands within 0.5 seconds
             {
                 std::lock_guard<std::mutex> lock(m_commandTimeMutex);
@@ -679,7 +691,7 @@ void VoiceAssistantService::processTranscription(const std::string& text) {
                 m_lastCommandTime = now;
             }
             
-            executeCommand(*bestCmd, confidence);
+            executeCommand(*bestCmd, text, confidence);
             // Don't clear buffer - keep it visible in the extension
         } else if (bestCmd) {
             log("INFO", "Command match below threshold, not executing");
@@ -705,15 +717,20 @@ void VoiceAssistantService::processTranscription(const std::string& text) {
             emitNotification("Mode Changed", "Normal Mode", "normal");
             clearBuffer();
         } else {
-            // Normal typing mode - emit buffer changes for text input
+            // Type the recognized text using ydotool
+            typeText(text);
+            // Also emit buffer changes for visual feedback
             emitBufferChanged(text);
         }
     }
 }
 
-void VoiceAssistantService::executeCommand(const Command& cmd, double confidence) {
+void VoiceAssistantService::executeCommand(const Command& cmd, const std::string& text, double confidence) {
     log("INFO", "Executing command: " + cmd.name + " (confidence: " + 
         std::to_string(confidence) + ")");
+    
+    // Record this command execution for duplicate detection
+    addCommandExecution(cmd, text, confidence);
     
     // Check if this is the exit command mode command
     if (cmd.command == "exit_command_mode") {
@@ -721,6 +738,16 @@ void VoiceAssistantService::executeCommand(const Command& cmd, double confidence
         setModeInternal(Mode::Normal);
         emitModeChanged("normal", "command");
         emitNotification("Mode Changed", "Normal Mode", "normal");
+        clearBuffer();
+        return;
+    }
+    
+    // Check if this is the start typing mode command
+    if (cmd.command == "start_typing_mode") {
+        log("INFO", "Start typing mode command detected, switching to typing mode");
+        setModeInternal(Mode::Typing);
+        emitModeChanged("typing", "command");
+        emitNotification("Mode Changed", "Typing Mode - Speak to type", "normal");
         clearBuffer();
         return;
     }
@@ -995,12 +1022,12 @@ bool VoiceAssistantService::isDuplicateTranscription(const std::string& text) {
     );
     
     // Check if this transcription is a duplicate
-    // Consider it duplicate if same text appeared in the last 2 seconds
+    // Consider it duplicate if same text appeared in the last 1.5 seconds
     for (const auto& record : m_recentTranscriptions) {
         if (record.text == text) {
             auto timeSince = std::chrono::duration_cast<std::chrono::milliseconds>(
                 now - record.timestamp).count();
-            if (timeSince < 2000) {
+            if (timeSince < 1500) {
                 return true;
             }
         }
@@ -1036,6 +1063,168 @@ void VoiceAssistantService::cleanOldTranscriptions() {
                 return age > 3;
             }),
         m_recentTranscriptions.end()
+    );
+}
+
+void VoiceAssistantService::typeText(const std::string& text) {
+    if (text.empty()) {
+        return;
+    }
+    
+    log("INFO", "Typing text: " + text);
+    
+    // Use ydotool to type the text
+    // First add a space before typing if needed (for continuous speech)
+    std::string command = "ydotool type ' " + text + "'";
+    
+    // Execute the typing command
+    int result = std::system(command.c_str());
+    
+    if (result != 0) {
+        log("ERROR", "Failed to type text with ydotool, exit code: " + std::to_string(result));
+        emitError("Typing Error", "Failed to type text. Ensure ydotool daemon is running.");
+    } else {
+        log("INFO", "Successfully typed text");
+    }
+}
+
+bool VoiceAssistantService::isDuplicateCommand(const Command& cmd, const std::string& text, double confidence) {
+    std::lock_guard<std::mutex> lock(m_commandHistoryMutex);
+    
+    // Clean old command history first (remove entries older than 3 seconds)
+    auto now = std::chrono::steady_clock::now();
+    m_commandHistory.erase(
+        std::remove_if(m_commandHistory.begin(), m_commandHistory.end(),
+            [&now](const CommandExecutionRecord& record) {
+                auto age = std::chrono::duration_cast<std::chrono::seconds>(
+                    now - record.timestamp).count();
+                return age > 3;
+            }),
+        m_commandHistory.end()
+    );
+    
+    // Check if this command was recently executed
+    // We use multiple criteria to detect duplicates from overlapping audio buffers:
+    // 1. Same command name within 1.5 seconds
+    // 2. Similar transcribed text (fuzzy match) within 1.5 seconds
+    for (const auto& record : m_commandHistory) {
+        auto timeSince = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - record.timestamp).count();
+        
+        // Only check recent commands (within 1.5 seconds)
+        if (timeSince > 1500) {
+            continue;
+        }
+        
+        // Check 1: Exact same command name
+        if (record.commandName == cmd.name) {
+            log("INFO", "Duplicate command detected: Same command '" + cmd.name + 
+                "' executed " + std::to_string(timeSince) + "ms ago");
+            return true;
+        }
+        
+        // Check 2: Similar transcribed text (fuzzy match for overlapping audio)
+        // Calculate similarity using simple word overlap
+        double textSimilarity = calculateTextSimilarity(text, record.transcribedText);
+        if (textSimilarity > 0.7) {  // 70% similarity threshold
+            log("INFO", "Duplicate command detected: Similar text '" + text + 
+                "' vs '" + record.transcribedText + "' (similarity: " + 
+                std::to_string(textSimilarity * 100) + "%, " + 
+                std::to_string(timeSince) + "ms ago)");
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+double VoiceAssistantService::calculateTextSimilarity(const std::string& text1, const std::string& text2) {
+    // Simple word-based similarity check
+    // Split both texts into words and compare overlap
+    
+    auto splitWords = [](const std::string& text) {
+        std::vector<std::string> words;
+        std::istringstream iss(text);
+        std::string word;
+        while (iss >> word) {
+            // Remove punctuation
+            word.erase(std::remove_if(word.begin(), word.end(), ::ispunct), word.end());
+            if (!word.empty()) {
+                words.push_back(word);
+            }
+        }
+        return words;
+    };
+    
+    auto words1 = splitWords(text1);
+    auto words2 = splitWords(text2);
+    
+    if (words1.empty() || words2.empty()) {
+        return 0.0;
+    }
+    
+    // Count common words
+    int commonWords = 0;
+    for (const auto& w1 : words1) {
+        for (const auto& w2 : words2) {
+            if (w1 == w2) {
+                commonWords++;
+                break;
+            }
+        }
+    }
+    
+    // Calculate Jaccard similarity: intersection / union
+    int totalUniqueWords = words1.size() + words2.size() - commonWords;
+    if (totalUniqueWords == 0) {
+        return 0.0;
+    }
+    
+    return static_cast<double>(commonWords) / static_cast<double>(totalUniqueWords);
+}
+
+void VoiceAssistantService::addCommandExecution(const Command& cmd, const std::string& text, double confidence) {
+    std::lock_guard<std::mutex> lock(m_commandHistoryMutex);
+    
+    CommandExecutionRecord record;
+    record.commandName = cmd.name;
+    record.matchedPhrase = "";  // We'll find the matched phrase
+    
+    // Find which phrase was matched
+    for (const auto& phrase : cmd.phrases) {
+        if (matchPhrase(text, phrase) >= confidence) {
+            record.matchedPhrase = phrase;
+            break;
+        }
+    }
+    
+    record.transcribedText = text;
+    record.confidence = confidence;
+    record.timestamp = std::chrono::steady_clock::now();
+    
+    m_commandHistory.push_back(record);
+    
+    // Keep only last 20 command executions to prevent memory growth
+    if (m_commandHistory.size() > 20) {
+        m_commandHistory.erase(m_commandHistory.begin());
+    }
+    
+    log("INFO", "Command execution recorded: " + cmd.name + " (text: '" + text + 
+        "', confidence: " + std::to_string(confidence * 100) + "%)");
+}
+
+void VoiceAssistantService::cleanOldCommandHistory() {
+    std::lock_guard<std::mutex> lock(m_commandHistoryMutex);
+    
+    auto now = std::chrono::steady_clock::now();
+    m_commandHistory.erase(
+        std::remove_if(m_commandHistory.begin(), m_commandHistory.end(),
+            [&now](const CommandExecutionRecord& record) {
+                auto age = std::chrono::duration_cast<std::chrono::seconds>(
+                    now - record.timestamp).count();
+                return age > 3;
+            }),
+        m_commandHistory.end()
     );
 }
 

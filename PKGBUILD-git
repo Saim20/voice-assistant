@@ -50,7 +50,13 @@ prepare() {
     # Clone whisper.cpp if not present
     if [ ! -d "whisper.cpp" ]; then
         msg2 "Cloning whisper.cpp..."
-        git clone https://github.com/ggerganov/whisper.cpp.git whisper.cpp
+        git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git whisper.cpp
+    fi
+    
+    # Validate whisper.cpp
+    if [ ! -f "whisper.cpp/CMakeLists.txt" ]; then
+        error "Failed to clone whisper.cpp properly"
+        return 1
     fi
     
     # Display build configuration
@@ -84,19 +90,10 @@ prepare() {
 build() {
     cd "$srcdir/${pkgname%-git}"
     
-    # Download whisper model
-    local model_dir="$HOME/.local/share/voice-assistant/models"
-    local model_file="$model_dir/ggml-tiny.en.bin"
-    
-    if [ ! -f "$model_file" ]; then
-        msg2 "Downloading whisper tiny.en model (~75MB)..."
-        mkdir -p "$model_dir"
-        cd whisper.cpp
-        bash models/download-ggml-model.sh tiny.en
-        if [ -f "models/ggml-tiny.en.bin" ]; then
-            mv models/ggml-tiny.en.bin "$model_file"
-        fi
-        cd ..
+    # Validate whisper.cpp was cloned
+    if [ ! -d "whisper.cpp" ] || [ ! -f "whisper.cpp/CMakeLists.txt" ]; then
+        error "whisper.cpp not found or incomplete. Run prepare() first."
+        return 1
     fi
     
     # Build whisper.cpp first
@@ -162,7 +159,9 @@ package() {
     cp -r gnome-extension/gnome-assistant@saim/* "$ext_dir/"
     
     # Compile extension schemas
-    glib-compile-schemas "$ext_dir/schemas/" || true
+    if [ -d "$ext_dir/schemas" ]; then
+        glib-compile-schemas "$ext_dir/schemas/"
+    fi
     
     # Install default configuration
     install -Dm644 config.json \
@@ -171,5 +170,13 @@ package() {
     # Install documentation
     install -Dm644 README.md "$pkgdir/usr/share/doc/${pkgname%-git}/README.md"
     install -Dm644 GETTING_STARTED.md "$pkgdir/usr/share/doc/${pkgname%-git}/GETTING_STARTED.md"
+    install -Dm644 QUICKSTART_AUR.md "$pkgdir/usr/share/doc/${pkgname%-git}/QUICKSTART_AUR.md"
+    install -Dm644 AUR_PACKAGING.md "$pkgdir/usr/share/doc/${pkgname%-git}/AUR_PACKAGING.md"
     install -Dm644 docs/GPU_ACCELERATION.md "$pkgdir/usr/share/doc/${pkgname%-git}/GPU_ACCELERATION.md"
+    
+    # Install LICENSE
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/${pkgname%-git}/LICENSE"
+    
+    # Install model download helper
+    install -Dm755 download-model.sh "$pkgdir/usr/bin/gnome-assistant-download-model"
 }
