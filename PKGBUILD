@@ -1,6 +1,6 @@
 # Maintainer: Saim <saim20 at github dot com>
 pkgname=willow
-pkgver=2.1.0
+pkgver=2.1.1
 pkgrel=1
 pkgdesc="Simple offline configurable voice assistant for gnome"
 arch=('x86_64')

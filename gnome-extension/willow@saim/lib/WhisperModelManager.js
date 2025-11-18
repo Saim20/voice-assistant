@@ -387,10 +387,24 @@ export class WhisperModelManager {
             // Check if download completed
             if (file.query_exists(null)) {
                 this._downloadInProgress = false;
+                button.sensitive = true;
+                button.label = 'Download';
                 this._showToast(window, `${model.name} downloaded successfully`);
+                
+                // Refresh UI to show new model
                 if (refreshCallback) {
                     refreshCallback();
                 }
+                
+                return GLib.SOURCE_REMOVE;
+            }
+            
+            // Check if download failed (temp file gone but no final file)
+            if (!tempFile.query_exists(null) && !file.query_exists(null)) {
+                this._downloadInProgress = false;
+                button.sensitive = true;
+                button.label = 'Download';
+                this._showToast(window, `Download failed for ${model.name}`);
                 return GLib.SOURCE_REMOVE;
             }
             
@@ -413,8 +427,8 @@ export class WhisperModelManager {
         try {
             GLib.spawn_command_line_async(`sh -c '${command} && notify-send "Willow" "Model ${model.name} downloaded successfully"'`);
             
-            // Poll for completion every 2 seconds
-            GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, checkCompletion);
+            // Poll for completion every second for better responsiveness
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, checkCompletion);
         } catch (e) {
             console.error('Download error:', e);
             this._downloadInProgress = false;

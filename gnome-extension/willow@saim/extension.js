@@ -234,6 +234,16 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         
         this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
         
+        // Smart Workflows info (in command mode)
+        this._smartInfoItem = new PopupMenu.PopupMenuItem('Smart: Say "open [app]" or "search [engine] for [query]"', {
+            reactive: false,
+            style_class: 'willow-smart-info'
+        });
+        this.menu.addMenuItem(this._smartInfoItem);
+        this._smartInfoItem.visible = false; // Only show in command mode
+        
+        this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+        
         // Preferences
         this._prefsItem = new PopupMenu.PopupMenuItem('Preferences');
         this._prefsItem.connect('activate', () => {
@@ -437,6 +447,11 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             bufferText = '...' + bufferText.substring(bufferText.length - maxBufferLength);
         }
         this._bufferLabel.text = bufferText ? ` ${bufferText}` : '';
+        
+        // Update smart info visibility (only show in command mode)
+        if (this._smartInfoItem) {
+            this._smartInfoItem.visible = (this._currentMode === 'command');
+        }
         
         // Update menu items
         if (this._modeItem) {

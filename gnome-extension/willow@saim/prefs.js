@@ -169,6 +169,48 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
         }
 
         page.add(statusGroup);
+
+        // Smart Workflows group
+        const smartGroup = this._prefsBuilder.createGroup(
+            'Smart Workflows',
+            'Context-aware voice commands for opening apps and searching'
+        );
+
+        this._prefsBuilder.createInfoRow(
+            'Smart Open',
+            'Say "open [app]" or "launch [app]" in command mode to open any application (e.g., "open firefox", "launch spotify")',
+            smartGroup
+        );
+
+        this._prefsBuilder.createInfoRow(
+            'Smart Search',
+            'Say "search [engine] for [query]" in command mode (e.g., "search youtube for music videos", "search google for python tutorials")',
+            smartGroup
+        );
+
+        this._prefsBuilder.createInfoRow(
+            'Context Configuration',
+            'Smart workflows use ~/.config/willow/context.json to configure default apps, search engines, and app aliases',
+            smartGroup
+        );
+
+        this._prefsBuilder.createButtonRow(
+            'Edit Context File',
+            'Open the context configuration file to customize smart workflow behavior',
+            'Edit Context',
+            'document-edit-symbolic',
+            () => {
+                try {
+                    const contextPath = GLib.get_home_dir() + '/.config/willow/context.json';
+                    GLib.spawn_command_line_async(`xdg-open "${contextPath}"`);
+                } catch (e) {
+                    this._showToast(window, 'Could not open context file');
+                }
+            },
+            smartGroup
+        );
+
+        page.add(smartGroup);
         window.add(page);
     }
 
@@ -407,6 +449,12 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
         this._prefsBuilder.createInfoRow(
             'Service Control',
             'Use systemctl --user {start|stop|restart|status} willow.service',
+            serviceGroup
+        );
+
+        this._prefsBuilder.createInfoRow(
+            'Smart Features',
+            'Command mode supports smart open (any app) and smart search (configurable engines) via context.json',
             serviceGroup
         );
 
