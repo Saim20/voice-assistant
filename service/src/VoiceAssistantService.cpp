@@ -587,6 +587,27 @@ void VoiceAssistantService::updateModeWorkers() {
 void VoiceAssistantService::loadConfig() {
     std::lock_guard<std::mutex> lock(m_configMutex);
     
+    // Check if config file exists
+    if (!fs::exists(m_configPath)) {
+        // Try to copy default config from system location
+        const std::string systemConfig = "/usr/share/willow/config.json";
+        if (fs::exists(systemConfig)) {
+            try {
+                fs::path configPath(m_configPath);
+                fs::create_directories(configPath.parent_path());
+                fs::copy_file(systemConfig, m_configPath);
+                log("INFO", "Created config from system default: " + m_configPath);
+            } catch (const std::exception& e) {
+                log("ERROR", "Failed to copy default config: " + std::string(e.what()));
+                log("WARNING", "Using built-in defaults");
+                return;
+            }
+        } else {
+            log("WARNING", "Config file not found and no system default available, using built-in defaults");
+            return;
+        }
+    }
+    
     std::ifstream file(m_configPath);
     if (!file.is_open()) {
         log("WARNING", "Config file not found, using defaults");

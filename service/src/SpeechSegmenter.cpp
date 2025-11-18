@@ -11,9 +11,9 @@ namespace VoiceAssistant {
 
 SpeechSegmenter::SpeechSegmenter()
     : m_whisperCtx(nullptr)
-    , m_vadThreshold(0.001f)        // Conservative threshold
+    , m_vadThreshold(0.0003f)       // More sensitive threshold for normal speech
     , m_silenceDuration(0.8f)        // 800ms of silence ends segment
-    , m_minSpeechDuration(0.3f)      // Minimum 300ms of speech
+    , m_minSpeechDuration(0.25f)     // Minimum 250ms of speech
     , m_isSpeaking(false)
     , m_silenceFrames(0)
     , m_speechFrames(0)

@@ -172,8 +172,27 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             this._onNotification(title, message, urgency);
         });
         
-        // Get initial status
+        // Get initial status and auto-start if not running
         this._updateStatus();
+        
+        // Auto-start the service if it's not already running
+        try {
+            this._proxy.IsRunning = false; // Force initial check
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+                this._proxy.GetStatusRemote((result, error) => {
+                    if (!error && result) {
+                        const [status] = result;
+                        if (!status.is_running || !status.is_running.unpack()) {
+                            console.log('Willow: Auto-starting service');
+                            this._startService();
+                        }
+                    }
+                });
+                return GLib.SOURCE_REMOVE;
+            });
+        } catch (e) {
+            console.log('Willow: Auto-start check failed:', e);
+        }
         
         // Poll status periodically
         this._statusTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {

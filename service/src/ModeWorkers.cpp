@@ -24,13 +24,13 @@ void NormalModeWorker::start() {
     
     m_isRunning = true;
     
-    // Configure segmenter for power-efficient hotword detection
-    // Higher VAD threshold to ignore background noise
-    m_segmenter->setVADThreshold(0.002f);
+    // Configure segmenter for hotword detection
+    // Sensitive threshold for normal speech volume
+    m_segmenter->setVADThreshold(0.0005f);
     // Shorter silence duration for faster response
     m_segmenter->setSilenceDuration(0.5f);
     // Shorter minimum speech for hotword
-    m_segmenter->setMinSpeechDuration(0.2f);
+    m_segmenter->setMinSpeechDuration(0.15f);
     
     m_executor->log("INFO", "Normal mode worker started (hotword: " + m_hotword + ")");
 }

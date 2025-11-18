@@ -1,6 +1,6 @@
 {
   "_comment_hotword": "Activation word to trigger command mode from normal mode",
-  "hotword": "hey",
+  "hotword": "hey willow",
   
   "_comment_threshold": "Minimum confidence percentage (50-100) required to execute a command",
   "command_threshold": 80,
