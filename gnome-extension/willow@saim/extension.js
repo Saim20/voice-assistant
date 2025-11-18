@@ -95,7 +95,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         
         this._bufferLabel = new St.Label({
             text: '',
-            style_class: 'gnome-assistant-buffer-text',
+            style_class: 'willow-buffer-text',
             y_align: 2
         });
         this._box.add_child(this._bufferLabel);
@@ -118,7 +118,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         // Setup settings handlers
         this._setupSettingsHandlers();
         
-        console.log('GNOME Assistant: Extension initialized with D-Bus');
+        console.log('Willow: Extension initialized with D-Bus');
     }
     
     _setupDBus() {
@@ -130,8 +130,8 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
                 '/com/github/saim/VoiceAssistant',
                 (proxy, error) => {
                     if (error) {
-                        console.error('GNOME Assistant: D-Bus connection error:', error);
-                        console.error('Failed to connect to GNOME Assistant service');
+                        console.error('Willow: D-Bus connection error:', error);
+                        console.error('Failed to connect to Willow service');
                         return;
                     }
                     
@@ -140,12 +140,12 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             );
             
         } catch (e) {
-            console.error('GNOME Assistant: Failed to create D-Bus proxy:', e);
+            console.error('Willow: Failed to create D-Bus proxy:', e);
         }
     }
     
     _onDBusConnected() {
-        console.log('GNOME Assistant: Connected to D-Bus service');
+        console.log('Willow: Connected to D-Bus service');
         
         // Connect to signals
         this._proxy.connectSignal('ModeChanged', (proxy, sender, [newMode, oldMode]) => {
@@ -240,7 +240,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             try {
                 GLib.spawn_command_line_async('gnome-extensions prefs willow@saim');
             } catch (e) {
-                console.error('GNOME Assistant: Error opening preferences:', e);
+                console.error('Willow: Error opening preferences:', e);
             }
         });
         this.menu.addMenuItem(this._prefsItem);
@@ -271,9 +271,9 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             this._proxy.SetConfigValueRemote('processing_interval', new GLib.Variant('d', interval));
             this._proxy.SetConfigValueRemote('gpu_acceleration', new GLib.Variant('b', gpuAcceleration));
             
-            console.log('GNOME Assistant: Settings synced to service');
+            console.log('Willow: Settings synced to service');
         } catch (e) {
-            console.error('GNOME Assistant: Error syncing settings:', e);
+            console.error('Willow: Error syncing settings:', e);
         }
     }
     
@@ -281,37 +281,37 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     
     _setMode(mode) {
         if (!this._proxy) {
-            console.error('GNOME Assistant: Service not connected');
+            console.error('Willow: Service not connected');
             return;
         }
         
         try {
             this._proxy.SetModeRemote(mode, (result, error) => {
                 if (error) {
-                    console.error('GNOME Assistant: SetMode error:', error);
+                    console.error('Willow: SetMode error:', error);
                     console.error('Failed to change mode');
                 }
             });
         } catch (e) {
-            console.error('GNOME Assistant: SetMode exception:', e);
+            console.error('Willow: SetMode exception:', e);
         }
     }
     
     _startService() {
         if (!this._proxy) {
-            console.error('GNOME Assistant: Service not connected');
+            console.error('Willow: Service not connected');
             return;
         }
         
         try {
             this._proxy.StartRemote((result, error) => {
                 if (error) {
-                    console.error('GNOME Assistant: Start error:', error);
+                    console.error('Willow: Start error:', error);
                     console.error('Failed to start service');
                 }
             });
         } catch (e) {
-            console.error('GNOME Assistant: Start exception:', e);
+            console.error('Willow: Start exception:', e);
         }
     }
     
@@ -321,11 +321,11 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         try {
             this._proxy.StopRemote((result, error) => {
                 if (error) {
-                    console.error('GNOME Assistant: Stop error:', error);
+                    console.error('Willow: Stop error:', error);
                 }
             });
         } catch (e) {
-            console.error('GNOME Assistant: Stop exception:', e);
+            console.error('Willow: Stop exception:', e);
         }
     }
     
@@ -335,11 +335,11 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         try {
             this._proxy.RestartRemote((result, error) => {
                 if (error) {
-                    console.error('GNOME Assistant: Restart error:', error);
+                    console.error('Willow: Restart error:', error);
                 }
             });
         } catch (e) {
-            console.error('GNOME Assistant: Restart exception:', e);
+            console.error('Willow: Restart exception:', e);
         }
     }
     
@@ -349,7 +349,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         try {
             this._proxy.GetStatusRemote((result, error) => {
                 if (error) {
-                    console.error('GNOME Assistant: GetStatus error:', error);
+                    console.error('Willow: GetStatus error:', error);
                     return;
                 }
                 
@@ -359,7 +359,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
                 }
             });
         } catch (e) {
-            console.error('GNOME Assistant: GetStatus exception:', e);
+            console.error('Willow: GetStatus exception:', e);
         }
     }
     
@@ -370,7 +370,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         this._updateDisplay();
         
         // Mode changes are shown in the panel, no notification needed
-        console.log(`GNOME Assistant: Mode changed from ${oldMode} to ${newMode}`);
+        console.log(`Willow: Mode changed from ${oldMode} to ${newMode}`);
     }
     
     _onBufferChanged(buffer) {
@@ -379,7 +379,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     }
     
     _onCommandExecuted(command, phrase, confidence) {
-        console.log(`GNOME Assistant: Command executed: ${phrase} (${(confidence * 100).toFixed(1)}%)`);
+        console.log(`Willow: Command executed: ${phrase} (${(confidence * 100).toFixed(1)}%)`);
         
         // Command execution logged to console only, no notifications
     }
@@ -399,12 +399,12 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
     }
     
     _onError(message, details) {
-        console.error('GNOME Assistant:', message, details);
+        console.error('Willow:', message, details);
     }
     
     _onNotification(title, message, urgency) {
         // Notifications disabled - service notifications are logged only
-        console.log(`GNOME Assistant notification: ${title} - ${message}`);
+        console.log(`Willow notification: ${title} - ${message}`);
     }
     
     // UI updates
@@ -484,14 +484,14 @@ export default class VoiceAssistantExtension extends Extension {
     }
 
     enable() {
-        console.log('GNOME Assistant: Enabling extension');
+        console.log('Willow: Enabling extension');
         const settings = this.getSettings();
         this._indicator = new VoiceAssistantIndicator(settings);
         Main.panel.addToStatusArea('willow', this._indicator);
     }
 
     disable() {
-        console.log('GNOME Assistant: Disabling extension');
+        console.log('Willow: Disabling extension');
         if (this._indicator) {
             this._indicator.destroy();
             this._indicator = null;

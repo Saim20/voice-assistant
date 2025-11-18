@@ -14,7 +14,7 @@
   "_comment_logging": "Logging configuration",
   "logging": {
     "level": "INFO",
-    "file": "/tmp/gnome_assistant.log"
+    "file": "/tmp/willow.log"
   },
   
   "_comment_commands": "Voice command definitions - each has name, command, and trigger phrases",

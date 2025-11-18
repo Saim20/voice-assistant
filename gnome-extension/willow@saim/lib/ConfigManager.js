@@ -1,7 +1,7 @@
 /**
  * ConfigManager.js - Configuration management utilities
  * Handles loading, saving, and synchronizing configuration with the D-Bus service
- * Config file syncs between GNOME extension preferences and gnome assistant service
+ * Config file syncs between GNOME extension preferences and Willow service
  */
 
 import Gio from 'gi://Gio';
@@ -9,7 +9,7 @@ import GLib from 'gi://GLib';
 
 const VoiceAssistantIface = `
   <node>
-  <interface name="com.github.saim.GnomeAssistant">
+  <interface name="com.github.saim.Willow">
     <method name="UpdateConfig">
       <arg direction="in" type="s" name="config"/>
     </method>
@@ -22,7 +22,7 @@ const VoiceAssistantProxy = Gio.DBusProxy.makeProxyWrapper(VoiceAssistantIface);
 export class ConfigManager {
     constructor(settings) {
         this._settings = settings;
-        this._configPath = GLib.get_home_dir() + '/.config/gnome-assistant/config.json';
+        this._configPath = GLib.get_home_dir() + '/.config/willow/config.json';
         this._configFile = Gio.File.new_for_path(this._configPath);
         this._config = null;
         this._proxy = null;
@@ -36,7 +36,7 @@ export class ConfigManager {
         try {
             this._proxy = new VoiceAssistantProxy(
                 Gio.DBus.session,
-                'com.github.saim.GnomeAssistant',
+                'com.github.saim.Willow',
                 '/com/github/saim/VoiceAssistant'
             );
         } catch (e) {
@@ -238,7 +238,7 @@ export class ConfigManager {
             "gpu_acceleration": false,
             "logging": {
                 "level": "INFO",
-                "file": "/tmp/gnome_assistant.log"
+                "file": "/tmp/willow.log"
             },
             "commands": [],
             "typing_mode": {

@@ -126,14 +126,14 @@ VoiceAssistantService::VoiceAssistantService(sdbus::IConnection& connection, std
 
     // Set config path
     const char* home = std::getenv("HOME");
-    m_configPath = std::string(home) + "/.config/gnome-assistant/config.json";
-    m_logFile = "/tmp/gnome_assistant.log";
+    m_configPath = std::string(home) + "/.config/willow/config.json";
+    m_logFile = "/tmp/willow.log";
 
     // Load configuration
     loadConfig();
 
     // Initialize whisper with default model path - use tiny model
-    std::string modelPath = std::string(home) + "/.local/share/gnome-assistant/models";
+    std::string modelPath = std::string(home) + "/.local/share/willow/models";
     if (!initializeWhisper(modelPath)) {
         log("ERROR", "Failed to initialize Whisper model");
         emitError("Initialization Error", "Failed to load Whisper model from: " + modelPath);
@@ -207,7 +207,7 @@ void VoiceAssistantService::UpdateConfig(const std::string& configJson) {
             log("INFO", "GPU acceleration or model changed, reloading whisper...");
             shutdownWhisper();
             const char* home = std::getenv("HOME");
-            std::string modelPath = std::string(home) + "/.local/share/gnome-assistant/models";
+            std::string modelPath = std::string(home) + "/.local/share/willow/models";
             if (!initializeWhisper(modelPath)) {
                 log("ERROR", "Failed to reload Whisper model");
                 emitError("Reload Error", "Failed to reload Whisper model with new settings");
@@ -251,7 +251,7 @@ void VoiceAssistantService::SetConfigValue(const std::string& key, const sdbus::
         log("INFO", "Reloading whisper with new settings...");
         shutdownWhisper();
         const char* home = std::getenv("HOME");
-        std::string modelPath = std::string(home) + "/.local/share/gnome-assistant/models";
+        std::string modelPath = std::string(home) + "/.local/share/willow/models";
         if (!initializeWhisper(modelPath)) {
             log("ERROR", "Failed to reload Whisper model");
             emitError("Reload Error", "Failed to reload Whisper model with new settings");
@@ -366,40 +366,40 @@ std::string VoiceAssistantService::GetBuffer() {
 // Signal emission methods
 
 void VoiceAssistantService::emitModeChanged(const std::string& newMode, const std::string& oldMode) {
-    m_object->emitSignal("ModeChanged").onInterface("com.github.saim.GnomeAssistant")
+    m_object->emitSignal("ModeChanged").onInterface("com.github.saim.Willow")
         .withArguments(newMode, oldMode);
 }
 
 void VoiceAssistantService::emitBufferChanged(const std::string& buffer) {
-    m_object->emitSignal("BufferChanged").onInterface("com.github.saim.GnomeAssistant")
+    m_object->emitSignal("BufferChanged").onInterface("com.github.saim.Willow")
         .withArguments(buffer);
 }
 
 void VoiceAssistantService::emitCommandExecuted(const std::string& command, 
                                                 const std::string& phrase, double confidence) {
-    m_object->emitSignal("CommandExecuted").onInterface("com.github.saim.GnomeAssistant")
+    m_object->emitSignal("CommandExecuted").onInterface("com.github.saim.Willow")
         .withArguments(command, phrase, confidence);
 }
 
 void VoiceAssistantService::emitStatusChanged(const std::map<std::string, sdbus::Variant>& status) {
-    m_object->emitSignal("StatusChanged").onInterface("com.github.saim.GnomeAssistant")
+    m_object->emitSignal("StatusChanged").onInterface("com.github.saim.Willow")
         .withArguments(status);
 }
 
 void VoiceAssistantService::emitError(const std::string& message, const std::string& details) {
-    m_object->emitSignal("Error").onInterface("com.github.saim.GnomeAssistant")
+    m_object->emitSignal("Error").onInterface("com.github.saim.Willow")
         .withArguments(message, details);
 }
 
 void VoiceAssistantService::emitNotification(const std::string& title, 
                                              const std::string& message, 
                                              const std::string& urgency) {
-    m_object->emitSignal("Notification").onInterface("com.github.saim.GnomeAssistant")
+    m_object->emitSignal("Notification").onInterface("com.github.saim.Willow")
         .withArguments(title, message, urgency);
 }
 
 void VoiceAssistantService::emitConfigChanged(const std::string& config) {
-    m_object->emitSignal("ConfigChanged").onInterface("com.github.saim.GnomeAssistant")
+    m_object->emitSignal("ConfigChanged").onInterface("com.github.saim.Willow")
         .withArguments(config);
 }
 

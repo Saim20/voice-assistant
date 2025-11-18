@@ -10,8 +10,9 @@ import GLib from 'gi://GLib';
 
 export class WhisperModelManager {
     constructor() {
-        this._modelDir = GLib.get_home_dir() + '/.local/share/gnome-assistant/models';
+        this._modelDir = GLib.get_home_dir() + '/.local/share/willow/models';
         this._downloadInProgress = false;
+        this._refreshing = false;
         
         // Available whisper models with their details
         this._availableModels = [
@@ -107,14 +108,19 @@ export class WhisperModelManager {
      */
     _buildGroupContent(group, window) {
         // Current model status
-        const currentModel = this._getCurrentModel();
+        const currentModelFile = this._getCurrentModel();
+        let currentModelName = currentModelFile;
+        if (currentModelFile) {
+            const model = this._availableModels.find(m => m.file === currentModelFile);
+            if (model) currentModelName = model.name;
+        }
         this._statusRow = new Adw.ActionRow({
             title: 'Current Model',
-            subtitle: currentModel ? `Using ${currentModel}` : 'No model detected',
+            subtitle: currentModelFile ? `Using ${currentModelName}` : 'No model detected',
         });
         
-        if (currentModel) {
-            const sizeInfo = this._getModelSize(currentModel);
+        if (currentModelFile) {
+            const sizeInfo = this._getModelSize(currentModelFile);
             if (sizeInfo) {
                 const sizeLabel = new Gtk.Label({
                     label: sizeInfo,
@@ -163,16 +169,25 @@ export class WhisperModelManager {
      * Refresh the UI after model changes
      */
     _refreshUI(group, window) {
-        // Remove all children
-        let child = group.get_first_child();
-        while (child) {
-            const next = child.get_next_sibling();
-            group.remove(child);
-            child = next;
-        }
+        if (this._refreshing) return;
+        this._refreshing = true;
         
-        // Rebuild content
-        this._buildGroupContent(group, window);
+        // Schedule UI update on next idle cycle to avoid race conditions
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            // Remove all children
+            let child = group.get_first_child();
+            while (child) {
+                const next = child.get_next_sibling();
+                group.remove(child);
+                child = next;
+            }
+            
+            // Rebuild content
+            this._buildGroupContent(group, window);
+            
+            this._refreshing = false;
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     /**
@@ -259,7 +274,7 @@ export class WhisperModelManager {
     _getCurrentModel() {
         try {
             // First, try to read from config file
-            const configPath = GLib.get_home_dir() + '/.config/gnome-assistant/config.json';
+            const configPath = GLib.get_home_dir() + '/.config/willow/config.json';
             const configFile = Gio.File.new_for_path(configPath);
             
             if (configFile.query_exists(null)) {
@@ -367,6 +382,9 @@ export class WhisperModelManager {
         // Monitor download completion
         const checkCompletion = () => {
             const file = Gio.File.new_for_path(outputPath);
+            const tempFile = Gio.File.new_for_path(tempPath);
+            
+            // Check if download completed
             if (file.query_exists(null)) {
                 this._downloadInProgress = false;
                 this._showToast(window, `${model.name} downloaded successfully`);
@@ -375,12 +393,25 @@ export class WhisperModelManager {
                 }
                 return GLib.SOURCE_REMOVE;
             }
+            
+            // Update progress by checking temp file size
+            if (tempFile.query_exists(null)) {
+                try {
+                    const info = tempFile.query_info('standard::size', Gio.FileQueryInfoFlags.NONE, null);
+                    const bytes = info.get_size();
+                    const mb = (bytes / (1024 * 1024)).toFixed(0);
+                    button.label = `${mb} MB...`;
+                } catch (e) {
+                    // Ignore errors during progress check
+                }
+            }
+            
             return GLib.SOURCE_CONTINUE;
         };
 
         // Run download in background
         try {
-            GLib.spawn_command_line_async(`sh -c '${command} && notify-send "GNOME Assistant" "Model ${model.name} downloaded successfully"'`);
+            GLib.spawn_command_line_async(`sh -c '${command} && notify-send "Willow" "Model ${model.name} downloaded successfully"'`);
             
             // Poll for completion every 2 seconds
             GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, checkCompletion);
@@ -399,7 +430,7 @@ export class WhisperModelManager {
     _selectModel(model, window, onComplete) {
         try {
             // Load current config
-            const configPath = GLib.get_home_dir() + '/.config/gnome-assistant/config.json';
+            const configPath = GLib.get_home_dir() + '/.config/willow/config.json';
             const configFile = Gio.File.new_for_path(configPath);
             
             if (!configFile.query_exists(null)) {
@@ -430,13 +461,16 @@ export class WhisperModelManager {
             
             this._showToast(window, `Selected ${model.name}. Restarting service...`);
             
-            // Refresh UI immediately to show the new selection
-            if (onComplete) {
-                onComplete();
-            }
-            
             // Restart the service to apply the change
-            GLib.spawn_command_line_async('systemctl --user restart gnome-assistant.service');
+            GLib.spawn_command_line_async('systemctl --user restart willow.service');
+            
+            // Refresh UI after a brief delay to allow config file to be written
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+                if (onComplete) {
+                    onComplete();
+                }
+                return GLib.SOURCE_REMOVE;
+            });
             
             // Show notification after a delay
             GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 2, () => {

@@ -10,7 +10,7 @@ import GLib from 'gi://GLib';
 
 export class LogViewer {
     constructor() {
-        this._logFile = '/tmp/gnome_assistant.log';
+        this._logFile = '/tmp/willow.log';
     }
 
     /**
@@ -160,7 +160,7 @@ export class LogViewer {
      * View journal logs (copy command to clipboard and show info)
      */
     _viewJournalLogs(window) {
-        const command = 'journalctl --user -u gnome-assistant.service -f';
+        const command = 'journalctl --user -u willow.service -f';
         
         // Copy to clipboard
         const display = window.get_display();

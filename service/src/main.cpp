@@ -31,7 +31,7 @@ int main(int /*argc*/, char* /*argv*/[]) {
         const std::string objectPath = "/com/github/saim/VoiceAssistant";
         VoiceAssistant::VoiceAssistantService service(*connection, objectPath);
 
-        std::cout << "GNOME Assistant Service running on D-Bus" << std::endl;
+        std::cout << "Willow Service running on D-Bus" << std::endl;
         std::cout << "Bus name: com.github.saim.Willow" << std::endl;
         std::cout << "Object path: " << objectPath << std::endl;
         std::cout << "Press Ctrl+C to exit" << std::endl;

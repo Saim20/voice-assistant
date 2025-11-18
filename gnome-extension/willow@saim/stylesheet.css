@@ -1,30 +1,30 @@
-/* GNOME Assistant Extension Styles */
+/* Willow Extension Styles */
 
 /* Normal mode - subtle circular glow effect */
-.gnome-assistant-normal {
+.willow-normal {
     color: #ffffff;
-    animation: gnome-assistant-idle 3s ease-in-out infinite;
+    animation: willow-idle 3s ease-in-out infinite;
 }
 
 /* Command mode - red with more dynamic pulsing animation */
-.gnome-assistant-command {
+.willow-command {
     color: #ff6b6b !important;
-    animation: gnome-assistant-active 1s ease-in-out infinite;
+    animation: willow-active 1s ease-in-out infinite;
 }
 
 /* Typing mode - blue/teal color with gentle rotation */
-.gnome-assistant-typing {
+.willow-typing {
     color: #4ecdc4 !important;
-    animation: gnome-assistant-typing-spin 2s linear infinite;
+    animation: willow-typing-spin 2s linear infinite;
 }
 
 /* Listening indicator - slight glow when active */
-.gnome-assistant-listening {
+.willow-listening {
     text-shadow: 0 0 8px currentColor;
 }
 
 /* Idle animation for normal mode - subtle breathing effect */
-@keyframes gnome-assistant-idle {
+@keyframes willow-idle {
     0%, 100% { 
         opacity: 0.8;
         transform: scale(1.0);
@@ -38,7 +38,7 @@
 }
 
 /* Active animation for command mode - urgent pulsing */
-@keyframes gnome-assistant-active {
+@keyframes willow-active {
     0% { 
         opacity: 1.0;
         transform: scale(1.0);
@@ -57,7 +57,7 @@
 }
 
 /* Typing animation - gentle rotation with glow */
-@keyframes gnome-assistant-typing-spin {
+@keyframes willow-typing-spin {
     0% { 
         transform: rotate(0deg);
         text-shadow: 0 0 4px currentColor;
@@ -78,18 +78,18 @@
 }
 
 /* Menu item styles */
-.gnome-assistant-mode-item {
+.willow-mode-item {
     font-weight: bold;
 }
 
-.gnome-assistant-buffer-item {
+.willow-buffer-item {
     font-family: monospace;
     font-size: 0.9em;
     color: #888;
 }
 
 /* Buffer text display in panel */
-.gnome-assistant-buffer-text {
+.willow-buffer-text {
     font-size: 0.75em;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Cantarell, sans-serif;
     font-weight: 500;
@@ -107,7 +107,7 @@
 }
 
 /* Optional label styling (if enabled) */
-.gnome-assistant-label {
+.willow-label {
     font-size: 0.8em;
     font-weight: bold;
     margin-left: 4px;
@@ -115,14 +115,14 @@
 }
 
 /* Buffer text color variations by mode */
-.gnome-assistant-command .gnome-assistant-buffer-text {
+.willow-command .willow-buffer-text {
     color: rgba(255, 255, 255, 0.95);
     background: linear-gradient(135deg, rgba(255, 107, 107, 0.2), rgba(255, 80, 80, 0.15));
     border-color: rgba(255, 107, 107, 0.3);
     box-shadow: 0 2px 8px rgba(255, 107, 107, 0.2);
 }
 
-.gnome-assistant-typing .gnome-assistant-buffer-text {
+.willow-typing .willow-buffer-text {
     color: rgba(255, 255, 255, 0.95);
     background: linear-gradient(135deg, rgba(78, 205, 196, 0.2), rgba(64, 224, 208, 0.15));
     border-color: rgba(78, 205, 196, 0.3);

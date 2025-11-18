@@ -1,5 +1,5 @@
 /**
- * GNOME Assistant Preferences
+ * Willow Preferences
  * Configuration UI for D-Bus service parameters and command management
  */
 
@@ -114,7 +114,7 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
         // D-Bus Service Control group
         const serviceGroup = this._prefsBuilder.createGroup(
             'D-Bus Service Control',
-            'Manage synchronization with gnome assistant service'
+            'Manage synchronization with Willow service'
         );
 
         this._prefsBuilder.createButtonRow(
@@ -190,7 +190,7 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
 
         this._prefsBuilder.createInfoRow(
             'Log Location',
-            'Service logs are written to /tmp/gnome_assistant.log',
+            'Service logs are written to /tmp/willow.log',
             configGroup
         );
 
@@ -255,13 +255,13 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
 
         this._prefsBuilder.createButtonRow(
             'Restart Service',
-            'Restart the gnome assistant service to apply model changes',
+            'Restart the Willow service to apply model changes',
             'Restart Now',
             'view-refresh-symbolic',
             () => {
                 try {
-                    GLib.spawn_command_line_async('systemctl --user restart gnome-assistant.service');
-                    this._showToast(window, 'Restarting gnome assistant service...');
+                    GLib.spawn_command_line_async('systemctl --user restart willow.service');
+                    this._showToast(window, 'Restarting Willow service...');
                 } catch (e) {
                     this._showToast(window, 'Failed to restart service');
                 }
@@ -356,7 +356,7 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
 
         // Info group
         const infoGroup = this._prefsBuilder.createGroup(
-            'GNOME Assistant with Whisper.cpp',
+            'Willow with Whisper.cpp',
             'Modern D-Bus-based voice control system for GNOME with offline speech recognition'
         );
 
@@ -389,12 +389,12 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
         // D-Bus Service group
         const serviceGroup = this._prefsBuilder.createGroup(
             'D-Bus Service',
-            'Information about the gnome assistant D-Bus service'
+            'Information about the Willow D-Bus service'
         );
 
         this._prefsBuilder.createInfoRow(
             'Service Name',
-            'com.github.saim.GnomeAssistant',
+            'com.github.saim.Willow',
             serviceGroup
         );
 
@@ -406,7 +406,7 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
 
         this._prefsBuilder.createInfoRow(
             'Service Control',
-            'Use systemctl --user {start|stop|restart|status} gnome-assistant.service',
+            'Use systemctl --user {start|stop|restart|status} willow.service',
             serviceGroup
         );
 
@@ -464,7 +464,7 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
 
     _openConfigDirectory() {
         try {
-            const configDir = GLib.get_home_dir() + '/.config/gnome-assistant';
+            const configDir = GLib.get_home_dir() + '/.config/willow';
             GLib.spawn_command_line_async(`nautilus "${configDir}"`);
         } catch (e) {
             console.log('Could not open config directory');
@@ -473,7 +473,7 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
 
     _openDocumentation() {
         try {
-            GLib.spawn_command_line_async('xdg-open https://github.com/Saim20/gnome-assistant');
+            GLib.spawn_command_line_async('xdg-open https://github.com/Saim20/willow');
         } catch (e) {
             console.log('Could not open documentation');
         }
@@ -481,7 +481,7 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
 
     _openIssueTracker() {
         try {
-            GLib.spawn_command_line_async('xdg-open https://github.com/Saim20/gnome-assistant/issues');
+            GLib.spawn_command_line_async('xdg-open https://github.com/Saim20/willow/issues');
         } catch (e) {
             console.log('Could not open issue tracker');
         }
@@ -489,7 +489,7 @@ export default class VoiceAssistantExtensionPreferences extends ExtensionPrefere
 
     _showToast(window, message) {
         // Simple console log for compatibility
-        console.log(`GNOME Assistant: ${message}`);
+        console.log(`Willow: ${message}`);
         
         // Try to show a toast if available
         try {
