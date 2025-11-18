@@ -49,5 +49,10 @@ pkg/
 *.pkg.tar.zst
 *.pkg.tar.xz
 *.pkg.tar.gz
-.SRCINFO
-gnome-assistant
+
+# Migration artifacts
+*.old
+*.new
+MIGRATION*.md
+REBRANDING*.md
+*-migration.sh

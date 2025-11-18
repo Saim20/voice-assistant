@@ -253,5 +253,3 @@ MIT License - see [LICENSE](LICENSE) file for details.
 - [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
 
 ---
-
-Made with 🌿 by the Willow community
