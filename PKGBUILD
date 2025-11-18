@@ -32,7 +32,7 @@ sha256sums=('SKIP')
 # To enable CUDA: export ENABLE_CUDA=1 before running makepkg
 # To enable Vulkan: export ENABLE_VULKAN=1 before running makepkg
 # Or edit this file and set _enable_cuda=1 or _enable_vulkan=1
-: ${ENABLE_CUDA:=0}
+: ${ENABLE_CUDA:=1}
 : ${ENABLE_VULKAN:=0}
 _enable_cuda=${ENABLE_CUDA}
 _enable_vulkan=${ENABLE_VULKAN}
