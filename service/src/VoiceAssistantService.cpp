@@ -6,9 +6,6 @@
 #include <iomanip>
 #include <cstdlib>
 #include <filesystem>
-#include <cmath>
-#include <regex>
-#include <sys/wait.h>
 #include <chrono>
 
 namespace fs = std::filesystem;
@@ -18,7 +15,7 @@ namespace VoiceAssistant {
 VoiceAssistantService::VoiceAssistantService(sdbus::IConnection& connection, std::string objectPath)
     : m_connection(connection)
     , m_objectPath(std::move(objectPath))
-    , m_whisperCtx(nullptr)
+    , m_currentWorker(nullptr)
     , m_isRunning(false)
     , m_currentMode(Mode::Normal)
     , m_hotword("hey")
@@ -29,7 +26,6 @@ VoiceAssistantService::VoiceAssistantService(sdbus::IConnection& connection, std
     , m_typingExitPhrases({"stop typing", "exit typing", "normal mode", "go to normal mode"})
     , m_stopAudioThread(false)
     , m_pulseAudio(nullptr)
-    , m_lastCommandTime(std::chrono::steady_clock::now())
 {
     // Create D-Bus object
     m_object = sdbus::createObject(m_connection, sdbus::ObjectPath(m_objectPath));
@@ -128,23 +124,55 @@ VoiceAssistantService::VoiceAssistantService(sdbus::IConnection& connection, std
     const char* home = std::getenv("HOME");
     m_configPath = std::string(home) + "/.config/willow/config.json";
     m_logFile = "/tmp/willow.log";
+    m_modelPath = std::string(home) + "/.local/share/willow/models";
 
     // Load configuration
     loadConfig();
 
-    // Initialize whisper with default model path - use tiny model
-    std::string modelPath = std::string(home) + "/.local/share/willow/models";
-    if (!initializeWhisper(modelPath)) {
+    // Create shared components
+    m_executor = std::make_shared<CommandExecutor>();
+    m_segmenter = std::make_shared<SpeechSegmenter>();
+    
+    // Initialize whisper in segmenter
+    if (!m_segmenter->initialize(m_modelPath, m_whisperModel, m_gpuAcceleration)) {
         log("ERROR", "Failed to initialize Whisper model");
-        emitError("Initialization Error", "Failed to load Whisper model from: " + modelPath);
+        emitError("Initialization Error", "Failed to load Whisper model from: " + m_modelPath);
     }
+    
+    // Setup transcription callback
+    m_segmenter->setTranscriptionCallback([this](const std::string& text) {
+        handleTranscription(text);
+    });
+    
+    // Create mode workers
+    m_normalWorker = std::make_unique<NormalModeWorker>(m_executor, m_segmenter);
+    m_commandWorker = std::make_unique<CommandModeWorker>(m_executor, m_segmenter);
+    m_typingWorker = std::make_unique<TypingModeWorker>(m_executor, m_segmenter);
+    
+    // Setup mode change callbacks
+    auto modeChangeCallback = [this](const std::string& newMode) {
+        SetMode(newMode);
+    };
+    
+    m_normalWorker->setModeChangeCallback(modeChangeCallback);
+    m_commandWorker->setModeChangeCallback(modeChangeCallback);
+    m_typingWorker->setModeChangeCallback(modeChangeCallback);
+    
+    // Configure workers
+    m_normalWorker->setHotword(m_hotword);
+    m_commandWorker->setCommands(m_commands);
+    m_commandWorker->setThreshold(m_commandThreshold);
+    m_typingWorker->setExitPhrases(m_typingExitPhrases);
+    
+    // Set initial worker
+    m_currentWorker = m_normalWorker.get();
 
-    log("INFO", "Voice Assistant Service initialized");
+    log("INFO", "Voice Assistant Service initialized (refactored architecture)");
 }
 
 VoiceAssistantService::~VoiceAssistantService() {
     Stop();
-    shutdownWhisper();
+    m_segmenter->shutdown();
 }
 
 // D-Bus Method Implementations
@@ -153,7 +181,19 @@ void VoiceAssistantService::SetMode(const std::string& mode) {
     Mode newMode = stringToMode(mode);
     std::string oldModeStr = modeToString(m_currentMode);
     
-    setModeInternal(newMode);
+    std::lock_guard<std::mutex> lock(m_modeMutex);
+    
+    // Stop current worker
+    if (m_currentWorker) {
+        m_currentWorker->stop();
+    }
+    
+    // Update mode
+    m_currentMode = newMode;
+    
+    // Set and start new worker
+    updateModeWorkers();
+    
     emitModeChanged(mode, oldModeStr);
     
     log("INFO", "Mode changed from " + oldModeStr + " to " + mode);
@@ -168,14 +208,9 @@ std::map<std::string, sdbus::Variant> VoiceAssistantService::GetStatus() {
     
     status["is_running"] = sdbus::Variant(m_isRunning.load());
     status["current_mode"] = sdbus::Variant(modeToString(m_currentMode));
-    
-    {
-        std::lock_guard<std::mutex> lock(m_bufferMutex);
-        status["current_buffer"] = sdbus::Variant(m_currentBuffer);
-    }
-    
+    status["current_buffer"] = sdbus::Variant(GetBuffer());
     status["command_count"] = sdbus::Variant(static_cast<int32_t>(m_commands.size()));
-    status["whisper_loaded"] = sdbus::Variant(m_whisperCtx != nullptr);
+    status["whisper_loaded"] = sdbus::Variant(m_segmenter->isWhisperLoaded());
     
     return status;
 }
@@ -195,7 +230,7 @@ void VoiceAssistantService::UpdateConfig(const std::string& configJson) {
     std::istringstream stream(configJson);
     
     if (Json::parseFromStream(reader, stream, &root, &errs)) {
-        // Store old GPU setting to detect changes
+        // Store old settings to detect changes
         bool oldGpuSetting = m_gpuAcceleration;
         std::string oldModel = m_whisperModel;
         
@@ -205,14 +240,18 @@ void VoiceAssistantService::UpdateConfig(const std::string& configJson) {
         // Reload whisper if GPU setting or model changed
         if (oldGpuSetting != m_gpuAcceleration || oldModel != m_whisperModel) {
             log("INFO", "GPU acceleration or model changed, reloading whisper...");
-            shutdownWhisper();
-            const char* home = std::getenv("HOME");
-            std::string modelPath = std::string(home) + "/.local/share/willow/models";
-            if (!initializeWhisper(modelPath)) {
+            m_segmenter->shutdown();
+            if (!m_segmenter->initialize(m_modelPath, m_whisperModel, m_gpuAcceleration)) {
                 log("ERROR", "Failed to reload Whisper model");
                 emitError("Reload Error", "Failed to reload Whisper model with new settings");
             }
         }
+        
+        // Update workers with new config
+        m_normalWorker->setHotword(m_hotword);
+        m_commandWorker->setCommands(m_commands);
+        m_commandWorker->setThreshold(m_commandThreshold);
+        m_typingWorker->setExitPhrases(m_typingExitPhrases);
         
         // Emit config changed signal
         emitConfigChanged(configJson);
@@ -229,8 +268,10 @@ void VoiceAssistantService::SetConfigValue(const std::string& key, const sdbus::
     
     if (key == "hotword") {
         m_hotword = value.get<std::string>();
+        m_normalWorker->setHotword(m_hotword);
     } else if (key == "command_threshold") {
         m_commandThreshold = value.get<double>();
+        m_commandWorker->setThreshold(m_commandThreshold);
     } else if (key == "processing_interval") {
         m_processingInterval = value.get<double>();
     } else if (key == "whisper_model") {
@@ -249,10 +290,8 @@ void VoiceAssistantService::SetConfigValue(const std::string& key, const sdbus::
     if (reloadWhisper) {
         m_configMutex.unlock();
         log("INFO", "Reloading whisper with new settings...");
-        shutdownWhisper();
-        const char* home = std::getenv("HOME");
-        std::string modelPath = std::string(home) + "/.local/share/willow/models";
-        if (!initializeWhisper(modelPath)) {
+        m_segmenter->shutdown();
+        if (!m_segmenter->initialize(m_modelPath, m_whisperModel, m_gpuAcceleration)) {
             log("ERROR", "Failed to reload Whisper model");
             emitError("Reload Error", "Failed to reload Whisper model with new settings");
         }
@@ -323,13 +362,18 @@ void VoiceAssistantService::Start() {
         return;
     }
     
-    if (!m_whisperCtx) {
+    if (!m_segmenter->isWhisperLoaded()) {
         emitError("Start Error", "Whisper model not loaded");
         return;
     }
     
     m_isRunning = true;
     m_stopAudioThread = false;
+    
+    // Start current mode worker
+    if (m_currentWorker) {
+        m_currentWorker->start();
+    }
     
     startAudioCapture();
     
@@ -345,6 +389,11 @@ void VoiceAssistantService::Stop() {
     m_isRunning = false;
     m_stopAudioThread = true;
     
+    // Stop current mode worker
+    if (m_currentWorker) {
+        m_currentWorker->stop();
+    }
+    
     stopAudioCapture();
     
     log("INFO", "Voice Assistant stopped");
@@ -359,8 +408,17 @@ void VoiceAssistantService::Restart() {
 }
 
 std::string VoiceAssistantService::GetBuffer() {
-    std::lock_guard<std::mutex> lock(m_bufferMutex);
-    return m_currentBuffer;
+    if (m_currentWorker) {
+        return m_currentWorker->getBuffer();
+    }
+    return "";
+}
+
+std::string VoiceAssistantService::CurrentBuffer() const {
+    if (m_currentWorker) {
+        return m_currentWorker->getBuffer();
+    }
+    return "";
 }
 
 // Signal emission methods
@@ -405,107 +463,6 @@ void VoiceAssistantService::emitConfigChanged(const std::string& config) {
 
 // Whisper integration
 
-bool VoiceAssistantService::initializeWhisper(const std::string& modelPath) {
-    m_modelPath = modelPath;
-    
-    // Use configured model, or default to tiny.en
-    std::string modelFile = modelPath + "/" + m_whisperModel;
-    
-    // Initialize whisper context with GPU support based on configuration
-    whisper_context_params cparams = whisper_context_default_params();
-    
-    // Use configured GPU acceleration setting
-    cparams.use_gpu = m_gpuAcceleration;
-    cparams.gpu_device = 0;  // Use first GPU device
-    
-    log("INFO", "Attempting to initialize Whisper with GPU acceleration: " + 
-        std::string(m_gpuAcceleration ? "enabled" : "disabled"));
-    m_whisperCtx = whisper_init_from_file_with_params(modelFile.c_str(), cparams);
-    
-    if (!m_whisperCtx) {
-        log("ERROR", "Failed to load Whisper model from: " + modelFile);
-        return false;
-    }
-    
-    // Log that model loaded successfully
-    log("INFO", "Whisper model loaded successfully (GPU acceleration: " + 
-        std::string(cparams.use_gpu ? "enabled" : "disabled") + ")");
-    
-    // Setup whisper parameters
-    m_whisperParams = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
-    m_whisperParams.print_progress = false;
-    m_whisperParams.print_timestamps = false;
-    m_whisperParams.print_special = false;
-    m_whisperParams.language = "en";
-    m_whisperParams.n_threads = 4;
-    m_whisperParams.translate = false;
-    
-    log("INFO", "Whisper initialization complete");
-    return true;
-}
-
-void VoiceAssistantService::shutdownWhisper() {
-    if (m_whisperCtx) {
-        whisper_free(m_whisperCtx);
-        m_whisperCtx = nullptr;
-    }
-}
-
-std::string VoiceAssistantService::transcribeAudio(const AudioBuffer& audio) {
-    if (!m_whisperCtx || audio.samples.empty()) {
-        return "";
-    }
-    
-    // Run whisper inference
-    if (whisper_full(m_whisperCtx, m_whisperParams, audio.samples.data(), 
-                     audio.samples.size()) != 0) {
-        log("ERROR", "Whisper transcription failed");
-        return "";
-    }
-    
-    // Get transcription result
-    const int n_segments = whisper_full_n_segments(m_whisperCtx);
-    std::string result;
-    
-    for (int i = 0; i < n_segments; ++i) {
-        const char* text = whisper_full_get_segment_text(m_whisperCtx, i);
-        if (text) {
-            result += text;
-        }
-    }
-    
-    // Clean the transcription
-    result = cleanTranscription(result);
-    
-    return result;
-}
-
-std::string VoiceAssistantService::cleanTranscription(const std::string& text) {
-    std::string result = text;
-    
-    // Remove content inside brackets [], braces {}, and parentheses ()
-    // This handles [BLANK_AUDIO], [MUSIC], etc.
-    std::regex bracketPattern(R"(\[[^\]]*\]|\{[^\}]*\}|\([^\)]*\))");
-    result = std::regex_replace(result, bracketPattern, "");
-    
-    // Remove punctuation (periods, commas, exclamation marks, question marks, etc.)
-    std::regex punctPattern(R"([.,!?;:])");
-    result = std::regex_replace(result, punctPattern, "");
-    
-    // Collapse multiple spaces into single space
-    std::regex multiSpacePattern(R"(\s+)");
-    result = std::regex_replace(result, multiSpacePattern, " ");
-    
-    // Trim whitespace
-    result.erase(0, result.find_first_not_of(" \t\n\r"));
-    result.erase(result.find_last_not_of(" \t\n\r") + 1);
-    
-    // Convert to lowercase for processing
-    std::transform(result.begin(), result.end(), result.begin(), ::tolower);
-    
-    return result;
-}
-
 // Audio capture (using PulseAudio/PipeWire)
 
 void VoiceAssistantService::startAudioCapture() {
@@ -515,7 +472,7 @@ void VoiceAssistantService::startAudioCapture() {
     pa_sample_spec ss;
     ss.format = PA_SAMPLE_FLOAT32LE;
     ss.channels = 1;  // Mono
-    ss.rate = WHISPER_SAMPLE_RATE;  // 16kHz for Whisper
+    ss.rate = 16000;  // 16kHz for Whisper
     
     pa_buffer_attr bufattr;
     bufattr.maxlength = (uint32_t) -1;
@@ -550,7 +507,6 @@ void VoiceAssistantService::stopAudioCapture() {
     
     if (m_audioThread.joinable()) {
         m_stopAudioThread = true;
-        m_audioCv.notify_all();
         m_audioThread.join();
     }
     
@@ -564,12 +520,6 @@ void VoiceAssistantService::audioProcessingLoop() {
     log("INFO", "Audio processing loop started");
     
     const size_t CHUNK_SIZE = 4096;  // Number of samples per chunk
-    const size_t BUFFER_DURATION_SEC = 2;  // Accumulate 2 seconds of audio for faster detection
-    const size_t BUFFER_SIZE = WHISPER_SAMPLE_RATE * BUFFER_DURATION_SEC;
-    
-    std::vector<float> audioBuffer;
-    audioBuffer.reserve(BUFFER_SIZE);
-    
     std::vector<float> chunk(CHUNK_SIZE);
     int error;
     
@@ -583,45 +533,8 @@ void VoiceAssistantService::audioProcessingLoop() {
             break;
         }
         
-        // Accumulate audio
-        audioBuffer.insert(audioBuffer.end(), chunk.begin(), chunk.end());
-        
-        // Process when we have enough audio
-        if (audioBuffer.size() >= BUFFER_SIZE) {
-            log("INFO", "Processing audio buffer of size: " + std::to_string(audioBuffer.size()));
-            
-            // Create audio buffer for transcription
-            AudioBuffer audio;
-            audio.samples = audioBuffer;
-            audio.sampleRate = WHISPER_SAMPLE_RATE;
-            audio.isComplete = true;
-            
-            // Transcribe audio
-            std::string transcription = transcribeAudio(audio);
-            
-            if (!transcription.empty()) {
-                log("INFO", "Transcription: " + transcription);
-                processTranscription(transcription);
-            }
-            
-            // Keep overlap based on mode - less overlap in typing mode to avoid duplicates
-            if (m_currentMode == Mode::Typing) {
-                // In typing mode, clear buffer completely to avoid any duplicate transcriptions
-                audioBuffer.clear();
-            } else {
-                // In other modes, keep 1 second for better command detection
-                const size_t overlap = WHISPER_SAMPLE_RATE;
-                if (audioBuffer.size() > overlap) {
-                    std::vector<float> newBuffer(
-                        audioBuffer.end() - overlap, 
-                        audioBuffer.end()
-                    );
-                    audioBuffer = std::move(newBuffer);
-                } else {
-                    audioBuffer.clear();
-                }
-            }
-        }
+        // Pass to speech segmenter for VAD-based processing
+        m_segmenter->processAudioChunk(chunk);
         
         // Check if we should stop
         if (m_stopAudioThread) break;
@@ -630,183 +543,43 @@ void VoiceAssistantService::audioProcessingLoop() {
     log("INFO", "Audio processing loop stopped");
 }
 
-// Command processing
+// Transcription handling
 
-void VoiceAssistantService::processTranscription(const std::string& text) {
-    // Check for duplicate transcriptions first
-    if (isDuplicateTranscription(text)) {
-        log("INFO", "Duplicate transcription ignored: " + text);
-        return;
-    }
+void VoiceAssistantService::handleTranscription(const std::string& text) {
+    log("INFO", "Transcription received: '" + text + "'");
     
-    // Record this transcription
-    addTranscriptionRecord(text);
-    
-    updateBuffer(text);
-    
-    Mode currentMode = m_currentMode.load();
-    
-    log("INFO", "Processing in mode: " + modeToString(currentMode) + ", text: '" + text + "'");
-    
-    if (currentMode == Mode::Normal) {
-        // Check for hotword (already lowercase from cleanTranscription)
-        if (text.find(m_hotword) != std::string::npos) {
-            log("INFO", "Hotword detected: " + m_hotword);
-            setModeInternal(Mode::Command);
-            emitModeChanged("command", "normal");
-            clearBuffer();
-        }
-    } else if (currentMode == Mode::Command) {
-        // Find best matching command
-        auto [bestCmd, confidence] = findBestMatch(text);
+    // Pass to current mode worker
+    if (m_currentWorker && m_isRunning) {
+        m_currentWorker->processTranscription(text);
         
-        log("INFO", "Best match confidence: " + std::to_string(confidence) + 
-            ", threshold: " + std::to_string(m_commandThreshold));
-        
-        if (bestCmd) {
-            log("INFO", "Best matching command: " + bestCmd->name + 
-                " (confidence: " + std::to_string(confidence * 100) + "%)");
-        }
-        
-        if (bestCmd && confidence >= m_commandThreshold) {
-            // Check for duplicate command execution (from overlapping audio buffers)
-            if (isDuplicateCommand(*bestCmd, text, confidence)) {
-                log("INFO", "Command ignored: Duplicate command detected from overlapping audio");
-                return;
-            }
-            
-            // Check debounce - prevent commands within 0.5 seconds
-            {
-                std::lock_guard<std::mutex> lock(m_commandTimeMutex);
-                auto now = std::chrono::steady_clock::now();
-                auto timeSinceLastCommand = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    now - m_lastCommandTime).count();
-                
-                if (timeSinceLastCommand < 500) {
-                    log("INFO", "Command ignored due to debounce (only " + 
-                        std::to_string(timeSinceLastCommand) + "ms since last command)");
-                    return;
-                }
-                
-                m_lastCommandTime = now;
-            }
-            
-            executeCommand(*bestCmd, text, confidence);
-            // Don't clear buffer - keep it visible in the extension
-        } else if (bestCmd) {
-            log("INFO", "Command match below threshold, not executing");
-        } else {
-            log("INFO", "No command matched");
-        }
-    } else if (currentMode == Mode::Typing) {
-        // In typing mode, check for exit phrases first
-        log("INFO", "Typing mode: checking for exit phrases in text: '" + text + "'");
-        bool shouldExit = false;
-        for (const auto& exitPhrase : m_typingExitPhrases) {
-            log("INFO", "Checking exit phrase: '" + exitPhrase + "'");
-            if (text.find(exitPhrase) != std::string::npos) {
-                log("INFO", "Typing exit phrase detected: " + exitPhrase);
-                shouldExit = true;
-                break;
-            }
-        }
-        
-        if (shouldExit) {
-            setModeInternal(Mode::Normal);
-            emitModeChanged("normal", "typing");
-            emitNotification("Mode Changed", "Normal Mode", "normal");
-            clearBuffer();
-        } else {
-            // Type the recognized text using ydotool
-            typeText(text);
-            // Also emit buffer changes for visual feedback
-            emitBufferChanged(text);
-        }
+        // Emit buffer changed for UI update
+        emitBufferChanged(GetBuffer());
     }
 }
 
-void VoiceAssistantService::executeCommand(const Command& cmd, const std::string& text, double confidence) {
-    log("INFO", "Executing command: " + cmd.name + " (confidence: " + 
-        std::to_string(confidence) + ")");
-    
-    // Record this command execution for duplicate detection
-    addCommandExecution(cmd, text, confidence);
-    
-    // Check if this is the exit command mode command
-    if (cmd.command == "exit_command_mode") {
-        log("INFO", "Exit command detected, switching to normal mode");
-        setModeInternal(Mode::Normal);
-        emitModeChanged("normal", "command");
-        emitNotification("Mode Changed", "Normal Mode", "normal");
-        clearBuffer();
-        return;
-    }
-    
-    // Check if this is the start typing mode command
-    if (cmd.command == "start_typing_mode") {
-        log("INFO", "Start typing mode command detected, switching to typing mode");
-        setModeInternal(Mode::Typing);
-        emitModeChanged("typing", "command");
-        emitNotification("Mode Changed", "Typing Mode - Speak to type", "normal");
-        clearBuffer();
-        return;
-    }
-    
-    // Build command with proper environment and background execution
-    // Using systemd-run ensures the app gets proper user session environment
-    std::string execCmd = "systemd-run --user --scope --slice=app.slice " + cmd.command + " &";
-    
-    log("INFO", "Executing: " + execCmd);
-    
-    // Execute the command in background
-    int result = std::system(execCmd.c_str());
-    
-    // systemd-run returns 0 if it successfully started the scope, even if the app fails later
-    // So we consider it successful if systemd-run itself succeeded
-    if (result == 0 || WIFEXITED(result)) {
-        log("INFO", "Command launched successfully");
-        emitCommandExecuted(cmd.command, cmd.name, confidence);
-        emitNotification("Command Executed", cmd.name, "normal");
-    } else {
-        log("ERROR", "Command execution failed with result: " + std::to_string(result));
-        emitError("Command Execution Failed", cmd.name);
-    }
-    
-    // Stay in command mode - buffer is not cleared to keep it visible in the extension
-}
+// Mode worker management
 
-double VoiceAssistantService::matchPhrase(const std::string& text, const std::string& phrase) {
-    // Text is already lowercase from cleanTranscription
-    // Convert phrase to lowercase for matching
-    std::string lowerPhrase = phrase;
-    std::transform(lowerPhrase.begin(), lowerPhrase.end(), lowerPhrase.begin(), ::tolower);
+void VoiceAssistantService::updateModeWorkers() {
+    // m_modeMutex should already be locked by caller
     
-    // Simple substring match
-    if (text.find(lowerPhrase) != std::string::npos) {
-        return 1.0;
+    Mode mode = m_currentMode.load();
+    
+    switch (mode) {
+        case Mode::Normal:
+            m_currentWorker = m_normalWorker.get();
+            break;
+        case Mode::Command:
+            m_currentWorker = m_commandWorker.get();
+            break;
+        case Mode::Typing:
+            m_currentWorker = m_typingWorker.get();
+            break;
     }
     
-    // TODO: Implement proper fuzzy matching algorithm for partial matches
-    return 0.0;
-}
-
-std::pair<const Command*, double> VoiceAssistantService::findBestMatch(const std::string& text) {
-    std::lock_guard<std::mutex> lock(m_commandsMutex);
-    
-    const Command* bestCmd = nullptr;
-    double bestConfidence = 0.0;
-    
-    for (const auto& cmd : m_commands) {
-        for (const auto& phrase : cmd.phrases) {
-            double confidence = matchPhrase(text, phrase);
-            if (confidence > bestConfidence) {
-                bestConfidence = confidence;
-                bestCmd = &cmd;
-            }
-        }
+    // Start the new worker if service is running
+    if (m_isRunning && m_currentWorker) {
+        m_currentWorker->start();
     }
-    
-    return {bestCmd, bestConfidence};
 }
 
 // Configuration management
@@ -992,240 +765,6 @@ void VoiceAssistantService::log(const std::string& level, const std::string& mes
         logFile << std::put_time(&tm, "%Y-%m-%d %H:%M:%S") 
                 << " [" << level << "] " << message << std::endl;
     }
-}
-
-void VoiceAssistantService::clearBuffer() {
-    std::lock_guard<std::mutex> lock(m_bufferMutex);
-    m_currentBuffer.clear();
-    emitBufferChanged("");
-}
-
-void VoiceAssistantService::updateBuffer(const std::string& text) {
-    std::lock_guard<std::mutex> lock(m_bufferMutex);
-    m_currentBuffer = text;
-    emitBufferChanged(text);
-}
-
-bool VoiceAssistantService::isDuplicateTranscription(const std::string& text) {
-    std::lock_guard<std::mutex> lock(m_transcriptionMutex);
-    
-    // Clean old transcriptions first (remove entries older than 3 seconds)
-    auto now = std::chrono::steady_clock::now();
-    m_recentTranscriptions.erase(
-        std::remove_if(m_recentTranscriptions.begin(), m_recentTranscriptions.end(),
-            [&now](const TranscriptionRecord& record) {
-                auto age = std::chrono::duration_cast<std::chrono::seconds>(
-                    now - record.timestamp).count();
-                return age > 3;
-            }),
-        m_recentTranscriptions.end()
-    );
-    
-    // Check if this transcription is a duplicate
-    // Consider it duplicate if same text appeared in the last 1.5 seconds
-    for (const auto& record : m_recentTranscriptions) {
-        if (record.text == text) {
-            auto timeSince = std::chrono::duration_cast<std::chrono::milliseconds>(
-                now - record.timestamp).count();
-            if (timeSince < 1500) {
-                return true;
-            }
-        }
-    }
-    
-    return false;
-}
-
-void VoiceAssistantService::addTranscriptionRecord(const std::string& text) {
-    std::lock_guard<std::mutex> lock(m_transcriptionMutex);
-    
-    TranscriptionRecord record;
-    record.text = text;
-    record.timestamp = std::chrono::steady_clock::now();
-    
-    m_recentTranscriptions.push_back(record);
-    
-    // Keep only last 10 transcriptions to prevent memory growth
-    if (m_recentTranscriptions.size() > 10) {
-        m_recentTranscriptions.erase(m_recentTranscriptions.begin());
-    }
-}
-
-void VoiceAssistantService::cleanOldTranscriptions() {
-    std::lock_guard<std::mutex> lock(m_transcriptionMutex);
-    
-    auto now = std::chrono::steady_clock::now();
-    m_recentTranscriptions.erase(
-        std::remove_if(m_recentTranscriptions.begin(), m_recentTranscriptions.end(),
-            [&now](const TranscriptionRecord& record) {
-                auto age = std::chrono::duration_cast<std::chrono::seconds>(
-                    now - record.timestamp).count();
-                return age > 3;
-            }),
-        m_recentTranscriptions.end()
-    );
-}
-
-void VoiceAssistantService::typeText(const std::string& text) {
-    if (text.empty()) {
-        return;
-    }
-    
-    log("INFO", "Typing text: " + text);
-    
-    // Use ydotool to type the text
-    // First add a space before typing if needed (for continuous speech)
-    std::string command = "ydotool type ' " + text + "'";
-    
-    // Execute the typing command
-    int result = std::system(command.c_str());
-    
-    if (result != 0) {
-        log("ERROR", "Failed to type text with ydotool, exit code: " + std::to_string(result));
-        emitError("Typing Error", "Failed to type text. Ensure ydotool daemon is running.");
-    } else {
-        log("INFO", "Successfully typed text");
-    }
-}
-
-bool VoiceAssistantService::isDuplicateCommand(const Command& cmd, const std::string& text, double confidence) {
-    std::lock_guard<std::mutex> lock(m_commandHistoryMutex);
-    
-    // Clean old command history first (remove entries older than 3 seconds)
-    auto now = std::chrono::steady_clock::now();
-    m_commandHistory.erase(
-        std::remove_if(m_commandHistory.begin(), m_commandHistory.end(),
-            [&now](const CommandExecutionRecord& record) {
-                auto age = std::chrono::duration_cast<std::chrono::seconds>(
-                    now - record.timestamp).count();
-                return age > 3;
-            }),
-        m_commandHistory.end()
-    );
-    
-    // Check if this command was recently executed
-    // We use multiple criteria to detect duplicates from overlapping audio buffers:
-    // 1. Same command name within 1.5 seconds
-    // 2. Similar transcribed text (fuzzy match) within 1.5 seconds
-    for (const auto& record : m_commandHistory) {
-        auto timeSince = std::chrono::duration_cast<std::chrono::milliseconds>(
-            now - record.timestamp).count();
-        
-        // Only check recent commands (within 1.5 seconds)
-        if (timeSince > 1500) {
-            continue;
-        }
-        
-        // Check 1: Exact same command name
-        if (record.commandName == cmd.name) {
-            log("INFO", "Duplicate command detected: Same command '" + cmd.name + 
-                "' executed " + std::to_string(timeSince) + "ms ago");
-            return true;
-        }
-        
-        // Check 2: Similar transcribed text (fuzzy match for overlapping audio)
-        // Calculate similarity using simple word overlap
-        double textSimilarity = calculateTextSimilarity(text, record.transcribedText);
-        if (textSimilarity > 0.7) {  // 70% similarity threshold
-            log("INFO", "Duplicate command detected: Similar text '" + text + 
-                "' vs '" + record.transcribedText + "' (similarity: " + 
-                std::to_string(textSimilarity * 100) + "%, " + 
-                std::to_string(timeSince) + "ms ago)");
-            return true;
-        }
-    }
-    
-    return false;
-}
-
-double VoiceAssistantService::calculateTextSimilarity(const std::string& text1, const std::string& text2) {
-    // Simple word-based similarity check
-    // Split both texts into words and compare overlap
-    
-    auto splitWords = [](const std::string& text) {
-        std::vector<std::string> words;
-        std::istringstream iss(text);
-        std::string word;
-        while (iss >> word) {
-            // Remove punctuation
-            word.erase(std::remove_if(word.begin(), word.end(), ::ispunct), word.end());
-            if (!word.empty()) {
-                words.push_back(word);
-            }
-        }
-        return words;
-    };
-    
-    auto words1 = splitWords(text1);
-    auto words2 = splitWords(text2);
-    
-    if (words1.empty() || words2.empty()) {
-        return 0.0;
-    }
-    
-    // Count common words
-    int commonWords = 0;
-    for (const auto& w1 : words1) {
-        for (const auto& w2 : words2) {
-            if (w1 == w2) {
-                commonWords++;
-                break;
-            }
-        }
-    }
-    
-    // Calculate Jaccard similarity: intersection / union
-    int totalUniqueWords = words1.size() + words2.size() - commonWords;
-    if (totalUniqueWords == 0) {
-        return 0.0;
-    }
-    
-    return static_cast<double>(commonWords) / static_cast<double>(totalUniqueWords);
-}
-
-void VoiceAssistantService::addCommandExecution(const Command& cmd, const std::string& text, double confidence) {
-    std::lock_guard<std::mutex> lock(m_commandHistoryMutex);
-    
-    CommandExecutionRecord record;
-    record.commandName = cmd.name;
-    record.matchedPhrase = "";  // We'll find the matched phrase
-    
-    // Find which phrase was matched
-    for (const auto& phrase : cmd.phrases) {
-        if (matchPhrase(text, phrase) >= confidence) {
-            record.matchedPhrase = phrase;
-            break;
-        }
-    }
-    
-    record.transcribedText = text;
-    record.confidence = confidence;
-    record.timestamp = std::chrono::steady_clock::now();
-    
-    m_commandHistory.push_back(record);
-    
-    // Keep only last 20 command executions to prevent memory growth
-    if (m_commandHistory.size() > 20) {
-        m_commandHistory.erase(m_commandHistory.begin());
-    }
-    
-    log("INFO", "Command execution recorded: " + cmd.name + " (text: '" + text + 
-        "', confidence: " + std::to_string(confidence * 100) + "%)");
-}
-
-void VoiceAssistantService::cleanOldCommandHistory() {
-    std::lock_guard<std::mutex> lock(m_commandHistoryMutex);
-    
-    auto now = std::chrono::steady_clock::now();
-    m_commandHistory.erase(
-        std::remove_if(m_commandHistory.begin(), m_commandHistory.end(),
-            [&now](const CommandExecutionRecord& record) {
-                auto age = std::chrono::duration_cast<std::chrono::seconds>(
-                    now - record.timestamp).count();
-                return age > 3;
-            }),
-        m_commandHistory.end()
-    );
 }
 
 } // namespace VoiceAssistant

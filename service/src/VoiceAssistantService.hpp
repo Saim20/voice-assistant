@@ -1,7 +1,6 @@
 #pragma once
 
 #include <sdbus-c++/sdbus-c++.h>
-#include <whisper.h>
 #include <json/json.h>
 #include <pulse/simple.h>
 #include <pulse/error.h>
@@ -15,24 +14,16 @@
 #include <condition_variable>
 #include <queue>
 
+#include "CommandExecutor.hpp"
+#include "SpeechSegmenter.hpp"
+#include "ModeWorkers.hpp"
+
 namespace VoiceAssistant {
 
 enum class Mode {
     Normal,
     Command,
     Typing
-};
-
-struct Command {
-    std::string name;
-    std::string command;
-    std::vector<std::string> phrases;
-};
-
-struct AudioBuffer {
-    std::vector<float> samples;
-    int sampleRate;
-    bool isComplete;
 };
 
 class VoiceAssistantService {
@@ -68,26 +59,17 @@ public:
     // D-Bus Properties
     bool IsRunning() const { return m_isRunning; }
     std::string CurrentMode() const { return modeToString(m_currentMode); }
-    std::string CurrentBuffer() const { return m_currentBuffer; }
+    std::string CurrentBuffer() const;
     std::string Version() const { return "2.0.0"; }
 
 private:
-    // Whisper.cpp integration
-    bool initializeWhisper(const std::string& modelPath);
-    void shutdownWhisper();
-    std::string transcribeAudio(const AudioBuffer& audio);
-    std::string cleanTranscription(const std::string& text);
-
     // Audio capture
     void startAudioCapture();
     void stopAudioCapture();
     void audioProcessingLoop();
 
-    // Command processing
-    void processTranscription(const std::string& text);
-    void executeCommand(const Command& cmd, const std::string& text, double confidence);
-    double matchPhrase(const std::string& text, const std::string& phrase);
-    std::pair<const Command*, double> findBestMatch(const std::string& text);
+    // Transcription handling
+    void handleTranscription(const std::string& text);
 
     // Configuration management
     void loadConfig();
@@ -102,25 +84,27 @@ private:
 
     // Helper methods
     void log(const std::string& level, const std::string& message);
-    void clearBuffer();
-    void updateBuffer(const std::string& text);
-    void typeText(const std::string& text);
+    void updateModeWorkers();
 
     // Member variables
     sdbus::IConnection& m_connection;
     std::string m_objectPath;
     std::unique_ptr<sdbus::IObject> m_object;
 
-    // Whisper
-    whisper_context* m_whisperCtx;
-    whisper_full_params m_whisperParams;
-    std::string m_modelPath;
+    // Core components (shared by all workers)
+    std::shared_ptr<CommandExecutor> m_executor;
+    std::shared_ptr<SpeechSegmenter> m_segmenter;
+    
+    // Mode workers
+    std::unique_ptr<NormalModeWorker> m_normalWorker;
+    std::unique_ptr<CommandModeWorker> m_commandWorker;
+    std::unique_ptr<TypingModeWorker> m_typingWorker;
+    ModeWorker* m_currentWorker;
 
     // State
     std::atomic<bool> m_isRunning;
     std::atomic<Mode> m_currentMode;
-    std::string m_currentBuffer;
-    mutable std::mutex m_bufferMutex;
+    mutable std::mutex m_modeMutex;
     
     // Commands
     std::vector<Command> m_commands;
@@ -134,14 +118,12 @@ private:
     bool m_gpuAcceleration;
     std::vector<std::string> m_typingExitPhrases;
     std::string m_configPath;
+    std::string m_modelPath;
     mutable std::mutex m_configMutex;
 
     // Audio processing
     std::thread m_audioThread;
     std::atomic<bool> m_stopAudioThread;
-    std::queue<AudioBuffer> m_audioQueue;
-    std::mutex m_audioMutex;
-    std::condition_variable m_audioCv;
     
     // PulseAudio
     pa_simple* m_pulseAudio;
@@ -149,36 +131,6 @@ private:
     // Logging
     std::string m_logFile;
     mutable std::mutex m_logMutex;
-    
-    // Command debouncing
-    std::chrono::steady_clock::time_point m_lastCommandTime;
-    std::mutex m_commandTimeMutex;
-    
-    // Transcription deduplication
-    struct TranscriptionRecord {
-        std::string text;
-        std::chrono::steady_clock::time_point timestamp;
-    };
-    std::vector<TranscriptionRecord> m_recentTranscriptions;
-    std::mutex m_transcriptionMutex;
-    bool isDuplicateTranscription(const std::string& text);
-    void addTranscriptionRecord(const std::string& text);
-    void cleanOldTranscriptions();
-    
-    // Command execution history (prevents duplicate command execution)
-    struct CommandExecutionRecord {
-        std::string commandName;       // Name of the executed command
-        std::string matchedPhrase;     // The phrase that was matched
-        std::string transcribedText;   // The actual transcribed text
-        double confidence;             // Confidence score
-        std::chrono::steady_clock::time_point timestamp;
-    };
-    std::vector<CommandExecutionRecord> m_commandHistory;
-    std::mutex m_commandHistoryMutex;
-    bool isDuplicateCommand(const Command& cmd, const std::string& text, double confidence);
-    void addCommandExecution(const Command& cmd, const std::string& text, double confidence);
-    void cleanOldCommandHistory();
-    double calculateTextSimilarity(const std::string& text1, const std::string& text2);
 };
 
 } // namespace VoiceAssistant

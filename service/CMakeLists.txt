@@ -80,10 +80,16 @@ pkg_check_modules(PULSEAUDIO IMPORTED_TARGET libpulse-simple)
 set(SOURCES
     src/main.cpp
     src/VoiceAssistantService.cpp
+    src/CommandExecutor.cpp
+    src/SpeechSegmenter.cpp
+    src/ModeWorkers.cpp
 )
 
 set(HEADERS
     src/VoiceAssistantService.hpp
+    src/CommandExecutor.hpp
+    src/SpeechSegmenter.hpp
+    src/ModeWorkers.hpp
 )
 
 # Create executable
