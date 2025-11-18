@@ -7,12 +7,19 @@
 #include <sstream>
 #include <algorithm>
 #include <sys/wait.h>
+#include <cctype>
 
 namespace VoiceAssistant {
 
 CommandExecutor::CommandExecutor()
     : m_logFile("/tmp/willow.log")
 {
+    // Load context config from default location
+    const char* home = std::getenv("HOME");
+    if (home) {
+        std::string contextPath = std::string(home) + "/.config/willow/context.json";
+        loadContextConfig(contextPath);
+    }
 }
 
 void CommandExecutor::executeCommand(const std::string& command) {
@@ -148,6 +155,159 @@ std::string CommandExecutor::escapeForShell(const std::string& str) {
         }
     }
     return escaped;
+}
+
+void CommandExecutor::loadContextConfig(const std::string& contextPath) {
+    log("INFO", "Loading context config from: " + contextPath);
+    
+    std::ifstream file(contextPath);
+    if (!file.is_open()) {
+        log("WARNING", "Could not open context config file, using defaults");
+        return;
+    }
+    
+    Json::Value root;
+    Json::CharReaderBuilder reader;
+    std::string errors;
+    
+    if (!Json::parseFromStream(reader, file, &root, &errors)) {
+        log("ERROR", "Failed to parse context config: " + errors);
+        return;
+    }
+    
+    // Load default apps
+    if (root.isMember("default_apps") && root["default_apps"].isObject()) {
+        for (const auto& key : root["default_apps"].getMemberNames()) {
+            m_context.defaultApps[key] = root["default_apps"][key].asString();
+        }
+    }
+    
+    // Load search engines
+    if (root.isMember("search_engines") && root["search_engines"].isObject()) {
+        for (const auto& key : root["search_engines"].getMemberNames()) {
+            m_context.searchEngines[key] = root["search_engines"][key].asString();
+        }
+    }
+    
+    // Load app aliases
+    if (root.isMember("app_aliases") && root["app_aliases"].isObject()) {
+        for (const auto& key : root["app_aliases"].getMemberNames()) {
+            std::vector<std::string> aliases;
+            const Json::Value& aliasArray = root["app_aliases"][key];
+            if (aliasArray.isArray()) {
+                for (const auto& alias : aliasArray) {
+                    aliases.push_back(alias.asString());
+                }
+            }
+            m_context.appAliases[key] = aliases;
+        }
+    }
+    
+    log("INFO", "Context config loaded successfully");
+}
+
+bool CommandExecutor::isCommandAvailable(const std::string& command) {
+    // Extract just the command name (before any arguments)
+    std::string cmdName = command;
+    size_t spacePos = cmdName.find(' ');
+    if (spacePos != std::string::npos) {
+        cmdName = cmdName.substr(0, spacePos);
+    }
+    
+    std::string checkCmd = "which " + cmdName + " >/dev/null 2>&1";
+    return std::system(checkCmd.c_str()) == 0;
+}
+
+std::string CommandExecutor::findApp(const std::string& appName) {
+    // Convert to lowercase for matching
+    std::string lowerName = appName;
+    std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+    
+    // First check if it's directly available
+    if (isCommandAvailable(lowerName)) {
+        return lowerName;
+    }
+    
+    // Check in app aliases
+    if (m_context.appAliases.count(lowerName)) {
+        for (const auto& alias : m_context.appAliases[lowerName]) {
+            if (isCommandAvailable(alias)) {
+                return alias;
+            }
+        }
+    }
+    
+    // Check default apps by category
+    if (m_context.defaultApps.count(lowerName)) {
+        std::string defaultApp = m_context.defaultApps[lowerName];
+        if (isCommandAvailable(defaultApp)) {
+            return defaultApp;
+        }
+    }
+    
+    return "";
+}
+
+std::string CommandExecutor::urlEncode(const std::string& str) {
+    std::ostringstream encoded;
+    encoded.fill('0');
+    encoded << std::hex;
+    
+    for (char c : str) {
+        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            encoded << c;
+        } else if (c == ' ') {
+            encoded << '+';
+        } else {
+            encoded << '%' << std::setw(2) << int(static_cast<unsigned char>(c));
+        }
+    }
+    
+    return encoded.str();
+}
+
+bool CommandExecutor::executeSmartOpen(const std::string& appName) {
+    log("INFO", "Smart open requested for: " + appName);
+    
+    std::string command = findApp(appName);
+    
+    if (command.empty()) {
+        log("WARNING", "Application not found: " + appName);
+        return false;
+    }
+    
+    log("INFO", "Opening application: " + command);
+    executeCommand(command);
+    return true;
+}
+
+bool CommandExecutor::executeSmartSearch(const std::string& engine, const std::string& query) {
+    log("INFO", "Smart search requested - Engine: " + engine + ", Query: " + query);
+    
+    // Convert engine name to lowercase
+    std::string lowerEngine = engine;
+    std::transform(lowerEngine.begin(), lowerEngine.end(), lowerEngine.begin(), ::tolower);
+    
+    // Find search engine URL
+    if (m_context.searchEngines.count(lowerEngine) == 0) {
+        log("WARNING", "Unknown search engine: " + engine);
+        return false;
+    }
+    
+    std::string baseUrl = m_context.searchEngines[lowerEngine];
+    std::string encodedQuery = urlEncode(query);
+    std::string url = baseUrl + encodedQuery;
+    
+    // Get default browser
+    std::string browser = "firefox"; // fallback
+    if (m_context.defaultApps.count("browser")) {
+        browser = m_context.defaultApps["browser"];
+    }
+    
+    std::string command = browser + " '" + url + "'";
+    log("INFO", "Opening search URL: " + url);
+    executeCommand(command);
+    return true;
 }
 
 } // namespace VoiceAssistant

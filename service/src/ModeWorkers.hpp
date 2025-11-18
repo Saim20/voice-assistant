@@ -118,6 +118,12 @@ private:
     bool isDuplicate(const std::string& commandName);
     void recordExecution(const std::string& commandName);
     void cleanHistory();
+    
+    // Smart workflow handlers
+    bool processSmartOpen(const std::string& text);
+    bool processSmartSearch(const std::string& text);
+    std::string extractAppName(const std::string& text, const std::string& trigger);
+    std::pair<std::string, std::string> extractSearchQuery(const std::string& text);
 };
 
 /**

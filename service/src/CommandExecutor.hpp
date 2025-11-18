@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <map>
 #include <json/json.h>
 
 namespace VoiceAssistant {
@@ -11,6 +12,12 @@ struct Command {
     std::string name;
     std::string command;
     std::vector<std::string> phrases;
+};
+
+struct ContextConfig {
+    std::map<std::string, std::string> defaultApps;
+    std::map<std::string, std::string> searchEngines;
+    std::map<std::string, std::vector<std::string>> appAliases;
 };
 
 /**
@@ -25,6 +32,10 @@ public:
     // Command execution
     void executeCommand(const std::string& command);
     
+    // Smart workflows
+    bool executeSmartOpen(const std::string& appName);
+    bool executeSmartSearch(const std::string& engine, const std::string& query);
+    
     // Keyboard simulation via ydotool
     void typeText(const std::string& text);
     void pressKey(const std::string& keyCode);
@@ -38,15 +49,25 @@ public:
         double threshold
     );
     
+    // Context configuration
+    void loadContextConfig(const std::string& contextPath);
+    const ContextConfig& getContextConfig() const { return m_context; }
+    
     // Logging
     void log(const std::string& level, const std::string& message);
 
 private:
     std::string m_logFile;
     mutable std::mutex m_logMutex;
+    ContextConfig m_context;
     
     // Helper for command execution
     bool executeSystemCommand(const std::string& command);
+    
+    // Smart workflow helpers
+    bool isCommandAvailable(const std::string& command);
+    std::string findApp(const std::string& appName);
+    std::string urlEncode(const std::string& str);
     
     // Helper for ydotool operations
     bool isYdotoolAvailable();

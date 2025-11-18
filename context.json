@@ -1,0 +1,37 @@
+{
+  "_comment": "Context configuration for smart workflows - defines default applications and search engines",
+  
+  "default_apps": {
+    "browser": "firefox",
+    "terminal": "kgx",
+    "file_manager": "nautilus",
+    "text_editor": "gedit",
+    "music_player": "rhythmbox",
+    "video_player": "totem"
+  },
+  
+  "search_engines": {
+    "youtube": "https://www.youtube.com/results?search_query=",
+    "google": "https://www.google.com/search?q=",
+    "facebook": "https://www.facebook.com/search/top?q=",
+    "reddit": "https://www.reddit.com/search/?q=",
+    "wikipedia": "https://en.wikipedia.org/wiki/Special:Search?search=",
+    "github": "https://github.com/search?q="
+  },
+  
+  "app_aliases": {
+    "browser": ["firefox", "chromium", "google-chrome", "brave-browser"],
+    "spotify": ["spotify"],
+    "vscode": ["code", "code-oss", "vscodium"],
+    "discord": ["discord"],
+    "slack": ["slack"],
+    "telegram": ["telegram-desktop"],
+    "thunderbird": ["thunderbird"],
+    "gimp": ["gimp"],
+    "blender": ["blender"],
+    "libreoffice": ["libreoffice"],
+    "writer": ["libreoffice --writer"],
+    "calc": ["libreoffice --calc"],
+    "impress": ["libreoffice --impress"]
+  }
+}

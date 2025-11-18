@@ -114,6 +114,16 @@ void CommandModeWorker::processTranscription(const std::string& text) {
     
     m_executor->log("INFO", "Command mode: processing '" + text + "'");
     
+    // Check for smart "open/launch" commands
+    if (processSmartOpen(text)) {
+        return;
+    }
+    
+    // Check for smart "search _ for" commands
+    if (processSmartSearch(text)) {
+        return;
+    }
+    
     // Find best matching command
     std::lock_guard<std::mutex> lock(m_commandsMutex);
     auto [bestCmd, confidence] = m_executor->findBestMatch(text, m_commands, m_threshold);
@@ -214,6 +224,112 @@ void CommandModeWorker::cleanHistory() {
             }),
         m_executionHistory.end()
     );
+}
+
+bool CommandModeWorker::processSmartOpen(const std::string& text) {
+    // Check for "open" or "launch" triggers
+    std::vector<std::string> triggers = {"open ", "launch ", "start "};
+    
+    for (const auto& trigger : triggers) {
+        if (text.find(trigger) != std::string::npos) {
+            std::string appName = extractAppName(text, trigger);
+            if (!appName.empty()) {
+                // Check for duplicate
+                if (isDuplicate("smart_open_" + appName)) {
+                    m_executor->log("INFO", "Smart open ignored: Duplicate detected");
+                    return true;
+                }
+                
+                recordExecution("smart_open_" + appName);
+                
+                if (m_executor->executeSmartOpen(appName)) {
+                    m_executor->log("INFO", "Smart open executed successfully: " + appName);
+                    return true;
+                }
+            }
+        }
+    }
+    
+    return false;
+}
+
+bool CommandModeWorker::processSmartSearch(const std::string& text) {
+    // Check for "search X for Y" pattern
+    auto [engine, query] = extractSearchQuery(text);
+    
+    if (!engine.empty() && !query.empty()) {
+        // Check for duplicate
+        std::string searchKey = "smart_search_" + engine + "_" + query;
+        if (isDuplicate(searchKey)) {
+            m_executor->log("INFO", "Smart search ignored: Duplicate detected");
+            return true;
+        }
+        
+        recordExecution(searchKey);
+        
+        if (m_executor->executeSmartSearch(engine, query)) {
+            m_executor->log("INFO", "Smart search executed: " + engine + " for " + query);
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+std::string CommandModeWorker::extractAppName(const std::string& text, const std::string& trigger) {
+    size_t pos = text.find(trigger);
+    if (pos == std::string::npos) {
+        return "";
+    }
+    
+    // Extract everything after the trigger
+    std::string appName = text.substr(pos + trigger.length());
+    
+    // Trim whitespace
+    size_t start = appName.find_first_not_of(" \t");
+    size_t end = appName.find_last_not_of(" \t");
+    
+    if (start != std::string::npos && end != std::string::npos) {
+        appName = appName.substr(start, end - start + 1);
+    }
+    
+    return appName;
+}
+
+std::pair<std::string, std::string> CommandModeWorker::extractSearchQuery(const std::string& text) {
+    // Pattern: "search [engine] for [query]"
+    size_t searchPos = text.find("search ");
+    if (searchPos == std::string::npos) {
+        return {"", ""};
+    }
+    
+    size_t forPos = text.find(" for ", searchPos);
+    if (forPos == std::string::npos) {
+        return {"", ""};
+    }
+    
+    // Extract engine name (between "search " and " for ")
+    size_t engineStart = searchPos + 7; // length of "search "
+    std::string engine = text.substr(engineStart, forPos - engineStart);
+    
+    // Extract query (everything after " for ")
+    std::string query = text.substr(forPos + 5); // length of " for "
+    
+    // Trim whitespace
+    auto trim = [](std::string& s) {
+        size_t start = s.find_first_not_of(" \t");
+        size_t end = s.find_last_not_of(" \t");
+        if (start != std::string::npos && end != std::string::npos) {
+            s = s.substr(start, end - start + 1);
+        } else {
+            s = "";
+        }
+    };
+    
+    trim(engine);
+    trim(query);
+    
+    return {engine, query};
 }
 
 // ============================================================================

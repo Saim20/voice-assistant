@@ -110,9 +110,49 @@ The panel icon shows the current mode:
 - Say "**stop typing**" to return to normal mode
 - Configure custom commands in Preferences
 
+**Smart Workflows**:
+- **Open/Launch Apps**: Say "**open [app name]**" or "**launch [app name]**"
+  - Examples: "open spotify", "launch firefox", "start discord"
+  - Automatically finds and launches apps from your system
+- **Web Search**: Say "**search [engine] for [query]**"
+  - Examples: "search youtube for tutorials", "search google for recipes"
+  - Supported engines: youtube, google, facebook, reddit, wikipedia, github
+  - Opens results in your default browser
+
 ## ⚙️ Configuration
 
-All settings are managed through the GNOME extension preferences UI, which syncs to `~/.config/willow/config.json`:
+All settings are managed through the GNOME extension preferences UI, which syncs to `~/.config/willow/config.json`.
+
+### Context Configuration
+
+Willow uses a context file at `~/.config/willow/context.json` to enable smart workflows:
+
+- **Default Apps**: Configure your preferred browser, terminal, file manager, etc.
+- **Search Engines**: Define custom search engines with base URLs
+- **App Aliases**: Map common app names to their system commands
+
+Example `context.json`:
+```json
+{
+  "default_apps": {
+    "browser": "firefox",
+    "terminal": "kgx",
+    "file_manager": "nautilus"
+  },
+  "search_engines": {
+    "youtube": "https://www.youtube.com/results?search_query=",
+    "google": "https://www.google.com/search?q="
+  },
+  "app_aliases": {
+    "spotify": ["spotify"],
+    "vscode": ["code", "code-oss", "vscodium"]
+  }
+}
+```
+
+### Main Configuration
+
+The main configuration file is at `~/.config/willow/config.json`:
 
 - **Command Threshold**: Minimum confidence % for command execution (50-100%, default 80%)
 - **Processing Interval**: Delay before processing speech (0.5-5.0s, default 1.5s)
