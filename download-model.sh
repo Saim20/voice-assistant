@@ -1,13 +1,13 @@
 #!/bin/bash
-# Helper script to download whisper models for GNOME Assistant
+# Helper script to download whisper models for Willow
 
 set -e
 
-MODEL_DIR="$HOME/.local/share/gnome-assistant/models"
+MODEL_DIR="$HOME/.local/share/willow/models"
 WHISPER_REPO="https://huggingface.co/ggerganov/whisper.cpp/resolve/main"
 
 echo "==================================================================="
-echo "GNOME Assistant - Whisper Model Downloader"
+echo "Willow - Whisper Model Downloader"
 echo "==================================================================="
 echo ""
 echo "Available models:"
@@ -81,10 +81,10 @@ echo ""
 
 # If not tiny.en, update config
 if [ "$MODEL" != "tiny.en" ]; then
-    CONFIG_FILE="$HOME/.config/gnome-assistant/config.json"
+    CONFIG_FILE="$HOME/.config/willow/config.json"
     if [ -f "$CONFIG_FILE" ]; then
         echo "To use this model, update your config:"
-        echo "  1. Open: gnome-extensions prefs gnome-assistant@saim"
+        echo "  1. Open: gnome-extensions prefs willow@saim"
         echo "  2. Go to 'General' tab"
         echo "  3. Change 'Whisper Model' to: $MODEL_FILE"
         echo ""
@@ -94,5 +94,5 @@ if [ "$MODEL" != "tiny.en" ]; then
 fi
 
 echo "Restart the service to use the new model:"
-echo "  systemctl --user restart gnome-assistant.service"
+echo "  systemctl --user restart willow.service"
 echo "==================================================================="

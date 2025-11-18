@@ -1,260 +1,257 @@
-# GNOME Assistant - Voice Control for GNOME Shell
+# 🌿 Willow - Voice Assistant for GNOME
 
-A voice-controlled assistant for GNOME Shell that uses offline speech recognition to execute commands hands-free.
+**Simple offline configurable voice assistant for GNOME**
 
-> **⚠️ DISCLAIMER**: This software is provided "as is" without warranty of any kind. Use at your own risk. The authors are not responsible for any damage, data loss, or issues that may arise from using this software. This is experimental software under active development.
+Willow brings powerful offline voice control to your GNOME desktop using whisper.cpp for fast, accurate speech recognition. Control your desktop entirely by voice - no cloud, no tracking, no internet required.
 
-## What It Does
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GNOME Shell](https://img.shields.io/badge/GNOME%20Shell-45%2B-blue)](https://www.gnome.org/)
 
-Control your GNOME desktop with voice commands:
-- Say "hey" to activate, then speak a command
-- Open applications, switch windows, manage workspaces
-- Simulate keyboard shortcuts for any task
-- Type using your voice in any application
-- Works completely offline - no internet required
+## ✨ Features
 
-## How It Works
+- 🎤 **Offline Speech Recognition** - Powered by whisper.cpp, works completely offline
+- 🔧 **Highly Configurable** - JSON-based command system with visual preferences UI
+- 🎯 **Three Operating Modes**:
+  - **Normal Mode**: Listens for hotword activation ("hey" by default)
+  - **Command Mode**: Executes configured voice commands automatically
+  - **Typing Mode**: Converts speech directly to keyboard input
+- 🖥️ **Native GNOME Integration** - Panel icon with real-time status, D-Bus architecture
+- ⚡ **GPU Acceleration** - Optional CUDA and Vulkan support for faster processing
+- 🔒 **Privacy First** - All processing happens locally on your machine
+- 🎨 **Visual Command Builder** - GUI for creating keyboard shortcuts and commands
+- 🌊 **Wayland Compatible** - Uses ydotool for reliable input simulation
 
-- **Say the hotword** ("hey") to activate listening
-- **Speak your command** (e.g., "open terminal", "switch window")
-- **Command executes automatically** if recognized with high confidence
-- All processing happens locally on your machine
-
-## Requirements
-
-- **GNOME Shell** 45, 46, 47, 48, or 49
-- **Linux distribution** with standard development tools
-- **Microphone** for voice input
-- **ydotool** for keyboard simulation on Wayland (most modern systems)
-
-## Installation
+## 📦 Installation
 
 ### Arch Linux (AUR)
 
 ```bash
-git clone https://github.com/Saim20/gnome-assistant.git
-cd gnome-assistant
+# Clone the repository
+git clone https://github.com/Saim20/willow.git
+cd willow
+
+# Build and install
 makepkg -si
-```
 
-**After installation, complete these steps from your GNOME desktop:**
-
-```bash
-# 1. Enable the extension
-gnome-extensions enable gnome-assistant@saim
-
-# 2. Start the service
-systemctl --user start gnome-assistant.service
-
-# 3. Enable ydotool for keyboard commands
-sudo systemctl enable --now ydotool
-sudo usermod -aG input $USER
-# Log out and back in for group changes
-```
-
-> **⚠️ Important:** If you installed via SSH, you must run steps 1-2 from a GNOME graphical session. The service requires D-Bus which is only available in an active GNOME session.
-
-### Other Linux Distributions
-
-**Step 1: Install Dependencies**
-
-```bash
-# Fedora/RHEL
-sudo dnf install cmake gcc-c++ sdbus-c++-devel jsoncpp-devel pulseaudio-libs-devel git ydotool
-
-# Ubuntu/Debian
-sudo apt install cmake g++ libsdbus-c++-dev libjsoncpp-dev libpulse-dev git ydotool
-
-# Arch (manual build)
-sudo pacman -S cmake gcc sdbus-cpp jsoncpp libpulse git ydotool
-```
-
-**Step 2: Build and Install**
-
-```bash
-git clone https://github.com/Saim20/gnome-assistant.git
-cd gnome-assistant
-./build.sh
-./install.sh
-```
-
-**Step 3: Complete Setup (from GNOME desktop, not SSH)**
-
-```bash
 # Enable the extension
-gnome-extensions enable gnome-assistant@saim
+gnome-extensions enable willow@saim
 
 # Start the service
-systemctl --user start gnome-assistant.service
-
-# Enable ydotool
-sudo systemctl enable --now ydotool
-sudo usermod -aG input $USER
-# Log out and back in
-
-# Verify it's running
-systemctl --user status gnome-assistant.service
+systemctl --user start willow.service
 ```
 
-> **⚠️ Important:** Steps must be run from an active GNOME session, not SSH or TTY, as the service requires D-Bus session bus.
+### Manual Installation
 
-## Getting Started
+```bash
+# Install dependencies (Arch Linux example)
+sudo pacman -S gnome-shell sdbus-cpp jsoncpp libpulse ydotool cmake git gcc
 
-1. **Click the microphone icon** in your GNOME panel
-2. **Select "Preferences"** to open settings
-3. **Review the default commands** - they work out of the box
-4. **Test it out**: Say "hey" then "show overview"
+# Clone the repository
+git clone https://github.com/Saim20/willow.git
+cd willow
+
+# Build the service
+cd service
+mkdir build && cd build
+cmake -DCMAKE_INSTALL_PREFIX=/usr ..
+make -j$(nproc)
+sudo make install
+
+# Install GNOME extension
+mkdir -p ~/.local/share/gnome-shell/extensions/
+cp -r ../gnome-extension/willow@saim ~/.local/share/gnome-shell/extensions/
+
+# Enable extension
+gnome-extensions enable willow@saim
+
+# Start service
+systemctl --user start willow.service
+
+# Download whisper model
+willow-download-model
+```
+
+## 🚀 Getting Started
+
+### Initial Setup
+
+1. **Verify Service Status**
+   ```bash
+   systemctl --user status willow.service
+   ```
+
+2. **Download Whisper Model**
+   ```bash
+   willow-download-model
+   ```
+   Choose the tiny.en model (~75MB) for best performance, or larger models for better accuracy.
+
+3. **Enable Auto-start** (Optional)
+   ```bash
+   systemctl --user enable willow.service
+   ```
+
+4. **Configure Preferences**
+   - Click the Willow icon in the top panel
+   - Select "Preferences"
+   - Adjust command threshold, hotword, and processing interval
+   - Add custom voice commands
+
+### Usage
+
+The panel icon shows the current mode:
+- 🎤 **Microphone** - Normal mode (listening for hotword)
+- 🔴 **Red pulsing** - Command mode (processing commands)
+- ⌨️ **Keyboard** - Typing mode (speech-to-text)
+
+**Basic Voice Commands**:
+- Say "**hey**" to activate command mode
+- Say "**typing mode**" to enable dictation
+- Say "**stop typing**" to return to normal mode
+- Configure custom commands in Preferences
+
+## ⚙️ Configuration
+
+All settings are managed through the GNOME extension preferences UI, which syncs to `~/.config/willow/config.json`:
+
+- **Command Threshold**: Minimum confidence % for command execution (50-100%, default 80%)
+- **Processing Interval**: Delay before processing speech (0.5-5.0s, default 1.5s)
+- **Hotword**: Activation word (default "hey")
+- **GPU Acceleration**: Enable CUDA/Vulkan for faster inference
 
 ### Adding Custom Commands
 
-In Preferences, you can:
-- Add new voice commands
-- Change the activation word (default: "hey")
-- Adjust sensitivity settings
-- Build keyboard shortcuts visually with the Key Command Builder
+Use the visual command builder in Preferences:
+1. Open Preferences → Commands tab
+2. Click "Add Command"
+3. Enter voice phrase and system command
+4. Use the keyboard shortcut builder for complex key combinations
 
-Example command:
-- **Name**: "Open Firefox"
-- **Command**: `firefox`
-- **Phrases**: "open firefox", "launch firefox"
-
-All changes apply immediately - no restart needed!
-
-## Default Voice Commands
-
-The assistant comes with useful commands pre-configured:
-
-**Window Management:**
-- "show overview" - Show all windows
-- "switch window" - Alt+Tab window switcher
-- "move left/right" - Switch workspace
-- "maximize/minimize" - Window controls
-
-**Applications:**
-- "open terminal" - Launch terminal
-- "open firefox" - Launch browser
-
-**Text Editing:**
-- "copy" - Ctrl+C
-- "paste" - Ctrl+V
-- "select all" - Ctrl+A
-
-**Custom Commands:**
-You can add any command or keyboard shortcut in Preferences. The extension includes a visual Key Command Builder to help you create keyboard combinations.
-
-## Usage
-
-**Voice Command Mode:**
-1. Say "hey" (the activation word)
-2. Speak your command (e.g., "open terminal")
-3. Command executes automatically
-
-**Typing Mode:**
-- Switch to typing mode from the panel menu
-- Everything you say will be typed as text
-- Great for dictation
-
-**Panel Icons:**
-- 🎤 **Normal** - Listening for activation word
-- 🔴 **Command** - Listening for command (pulsing red)
-- ⌨️ **Typing** - Speech-to-text mode
-- 🎤 **Gray** - Service stopped
-
-
-
-## Troubleshooting
-
-**Installation error: "Failed to connect to user scope bus"**
-
-This happens when installing from SSH or a non-graphical terminal. The service requires a GNOME session to be running.
-
-**Solution:** Log into your GNOME desktop, then:
-```bash
-# Start the service from your graphical session
-systemctl --user start gnome-assistant.service
-
-# Verify it's running
-systemctl --user status gnome-assistant.service
+Example commands:
+```json
+{
+  "name": "Open Terminal",
+  "command": "systemd-run --user --scope gnome-terminal",
+  "phrases": ["open terminal", "launch terminal"]
+}
 ```
 
-The extension should now work. You can also start the service automatically on next login:
+## 🎮 Keyboard Shortcuts
+
+Willow uses ydotool for Wayland-compatible keyboard simulation. The visual builder in Preferences generates the correct ydotool commands.
+
+**Example key commands**:
+- Ctrl+C: `ydotool key 29:1 46:1 46:0 29:0`
+- Alt+Tab: `ydotool key 56:1 15:1 15:0 56:0`
+
+## 🐛 Troubleshooting
+
+### Service won't start
 ```bash
-systemctl --user enable gnome-assistant.service
+# Check logs
+journalctl --user -u willow.service -f
+
+# Verify D-Bus connection
+gdbus introspect --session --dest com.github.saim.Willow --object-path /com/github/saim/VoiceAssistant
 ```
 
-**Service won't start:**
+### ydotool not working
 ```bash
-# Check if service is running
-systemctl --user status gnome-assistant.service
+# Enable and start ydotool service
+sudo systemctl enable --now ydotool
 
-# View logs
-journalctl --user -u gnome-assistant.service -f
-
-# Check if model is downloaded
-ls -lh ~/.local/share/gnome-assistant/models/
+# Add user to input group
+sudo usermod -aG input $USER
+# Log out and back in
 ```
 
-**Commands not working:**
+### Model not found
 ```bash
-# Verify ydotool is running
-systemctl --user status ydotoold
+# Check model location
+ls -lh ~/.local/share/willow/models/
 
-# Test ydotool manually
-ydotool type "test"
+# Download if missing
+willow-download-model
 ```
 
-**Microphone not working:**
-- Check microphone permissions in GNOME Settings
-- Verify PulseAudio/PipeWire is running: `pactl info`
-
-**Extension not showing:**
+### Extension not showing
 ```bash
-# Re-enable extension
-gnome-extensions disable gnome-assistant@saim
-gnome-extensions enable gnome-assistant@saim
+# Restart GNOME Shell
+# On X11: Alt+F2, type 'r', press Enter
+# On Wayland: Log out and back in
 
-# Restart GNOME Shell (X11 only): Alt+F2, type 'r', press Enter
-# For Wayland: Log out and back in
+# Check extension status
+gnome-extensions list
+gnome-extensions info willow@saim
 ```
 
-## FAQ
+## 📚 Advanced Configuration
 
-**Is my voice data sent anywhere?**
-No. All speech recognition happens locally on your computer. No internet connection required.
+For developers and advanced users, the configuration file at `~/.config/willow/config.json` supports:
 
-**How accurate is it?**
-Pretty good for short commands. The tiny.en model is optimized for speed while maintaining reasonable accuracy for command phrases.
+- Custom command definitions with regex phrase matching
+- Multiple whisper model configurations
+- Audio capture settings (sample rate, channels)
+- Confidence threshold tuning
+- Processing interval optimization
 
-**Can I use it in other languages?**
-Currently only English is supported. No other plan as of now.
+See `config.json` in the repository for the full structure.
 
-**Does it work on Wayland?**
-Yes! That's why ydotool is required - it's the Wayland-compatible input simulator.
+## 🔧 Development
 
-**How much CPU/RAM does it use?**
-Minimal - around 100-250MB RAM and low CPU usage. It's designed to be lightweight.
+### Building from Source
 
-## Advanced Configuration
+```bash
+# Clone with submodules
+git clone --recursive https://github.com/Saim20/willow.git
+cd willow
 
-For developers and advanced users, see the configuration file at `~/.config/gnome-assistant/config.json` which includes:
-- Detailed ydotool key code reference
-- Custom command examples
-- Threshold and timing settings
+# Build service
+cd service
+mkdir build && cd build
+cmake ..
+make
 
-## Contributing
+# Run service directly
+./willow-service
+```
 
-Contributions welcome! Please open an issue or pull request on GitHub.
+### GPU Acceleration
 
-## License
+**CUDA Support**:
+```bash
+export ENABLE_CUDA=1
+makepkg -si
+```
 
-0BSD License - See LICENSE file
+**Vulkan Support**:
+```bash
+export ENABLE_VULKAN=1
+makepkg -si
+```
 
-## Credits
+See `docs/GPU_ACCELERATION.md` for detailed setup instructions.
 
-- [whisper.cpp](https://github.com/ggerganov/whisper.cpp) - Offline speech recognition
-- [sdbus-c++](https://github.com/Kistler-Group/sdbus-cpp) - D-Bus communication
-- [ydotool](https://github.com/ReimuNotMoe/ydotool) - Wayland input simulation
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## 🙏 Credits
+
+- **whisper.cpp** - Georgi Gerganov and contributors for the excellent C++ implementation of OpenAI's Whisper
+- **GNOME Project** - For the amazing desktop environment
+- **sdbus-c++** - For the elegant D-Bus C++ bindings
+
+## 🔗 Links
+
+- [GitHub Repository](https://github.com/Saim20/willow)
+- [Issue Tracker](https://github.com/Saim20/willow/issues)
+- [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
 
 ---
 
-**Remember**: This is experimental software. Use at your own risk. Always test new commands in a safe environment before relying on them for important tasks.
+Made with 🌿 by the Willow community

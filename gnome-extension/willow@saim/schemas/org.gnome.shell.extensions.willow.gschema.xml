@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<schemalist gettext-domain="gnome-assistant">
-  <schema id="org.gnome.shell.extensions.gnome-assistant" path="/org/gnome/shell/extensions/gnome-assistant/">
+<schemalist gettext-domain="willow">
+  <schema id="org.gnome.shell.extensions.willow" path="/org/gnome/shell/extensions/willow/">
     <key name="update-interval" type="i">
       <default>2</default>
       <range min="1" max="10"/>

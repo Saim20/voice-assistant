@@ -14,7 +14,7 @@ import {ConfigManager} from './lib/ConfigManager.js';
 // D-Bus interface XML
 const VoiceAssistantIface = `
 <node>
-  <interface name="com.github.saim.GnomeAssistant">
+  <interface name="com.github.saim.Willow">
     <method name="SetMode">
       <arg direction="in" name="mode" type="s"/>
     </method>
@@ -79,7 +79,7 @@ const VoiceAssistantProxy = Gio.DBusProxy.makeProxyWrapper(VoiceAssistantIface);
 const VoiceAssistantIndicator = GObject.registerClass(
 class VoiceAssistantIndicator extends PanelMenu.Button {
     _init(settings) {
-        super._init(0.0, 'GNOME Assistant');
+        super._init(0.0, 'Willow');
         
         // Create panel UI
         this._box = new St.BoxLayout({
@@ -126,7 +126,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
             // Create proxy to the D-Bus service
             this._proxy = new VoiceAssistantProxy(
                 Gio.DBus.session,
-                'com.github.saim.GnomeAssistant',
+                'com.github.saim.Willow',
                 '/com/github/saim/VoiceAssistant',
                 (proxy, error) => {
                     if (error) {
@@ -238,7 +238,7 @@ class VoiceAssistantIndicator extends PanelMenu.Button {
         this._prefsItem = new PopupMenu.PopupMenuItem('Preferences');
         this._prefsItem.connect('activate', () => {
             try {
-                GLib.spawn_command_line_async('gnome-extensions prefs gnome-assistant@saim');
+                GLib.spawn_command_line_async('gnome-extensions prefs willow@saim');
             } catch (e) {
                 console.error('GNOME Assistant: Error opening preferences:', e);
             }
@@ -487,7 +487,7 @@ export default class VoiceAssistantExtension extends Extension {
         console.log('GNOME Assistant: Enabling extension');
         const settings = this.getSettings();
         this._indicator = new VoiceAssistantIndicator(settings);
-        Main.panel.addToStatusArea('gnome-assistant', this._indicator);
+        Main.panel.addToStatusArea('willow', this._indicator);
     }
 
     disable() {

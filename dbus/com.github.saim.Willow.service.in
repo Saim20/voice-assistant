@@ -1,0 +1,5 @@
+[D-BUS Service]
+Name=com.github.saim.Willow
+Exec=@CMAKE_INSTALL_PREFIX@/bin/willow-service
+User=
+SystemdService=willow.service

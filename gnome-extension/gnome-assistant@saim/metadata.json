@@ -1,9 +1,0 @@
-{
-  "uuid": "gnome-assistant@saim",
-  "name": "GNOME Assistant",
-  "description": "Advanced voice control with whisper.cpp offline speech recognition. D-Bus integration, visual command builder, Wayland ydotool support for keyboard shortcuts.",
-  "version": "2.0",
-  "shell-version": ["45", "46", "47", "48", "49"],
-  "url": "https://github.com/Saim20/gnome-assistant",
-  "settings-schema": "org.gnome.shell.extensions.gnome-assistant"
-}

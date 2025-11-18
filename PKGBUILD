@@ -1,10 +1,10 @@
 # Maintainer: Saim <saim20 at github dot com>
-pkgname=gnome-assistant
+pkgname=willow
 pkgver=2.0.0
 pkgrel=1
-pkgdesc="Advanced voice control for GNOME Shell with whisper.cpp offline speech recognition"
+pkgdesc="Simple offline configurable voice assistant for gnome"
 arch=('x86_64')
-url="https://github.com/Saim20/gnome-assistant"
+url="https://github.com/Saim20/willow"
 license=('MIT')
 depends=(
     'gnome-shell>=45'
@@ -24,8 +24,8 @@ optdepends=(
     'vulkan-headers: for Vulkan GPU acceleration build support'
 )
 options=('!debug')
-install=gnome-assistant.install
-source=("gnome-assistant::git+https://github.com/Saim20/gnome-assistant.git")
+install=willow.install
+source=("willow::git+https://github.com/Saim20/willow.git")
 sha256sums=('SKIP')
 
 # Build options - users can enable these before building
@@ -98,130 +98,103 @@ prepare() {
     # Clone whisper.cpp if not present
     if [ ! -d "whisper.cpp" ]; then
         printf "Cloning whisper.cpp...\n"
-        git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git whisper.cpp
-    fi
-    
-    # Validate whisper.cpp
-    if [ ! -f "whisper.cpp/CMakeLists.txt" ]; then
-        printf "ERROR: Failed to clone whisper.cpp properly\n" >&2
-        return 1
-    fi
-    
-    # Display build configuration
-    printf "===================================================================\n"
-    printf "Build configuration:\n"
-    printf "  CUDA support: %s\n" "$([ $_enable_cuda -eq 1 ] && echo 'enabled' || echo 'disabled')"
-    printf "  Vulkan support: %s\n" "$([ $_enable_vulkan -eq 1 ] && echo 'enabled' || echo 'disabled')"
-    printf "===================================================================\n"
-    printf "\n"
-    printf "To enable GPU acceleration:\n"
-    printf "  CUDA: export ENABLE_CUDA=1 before running makepkg\n"
-    printf "  Vulkan: export ENABLE_VULKAN=1 before running makepkg\n"
-    printf "===================================================================\n"
-    
-    # Check dependencies if GPU acceleration is requested
-    if [ $_enable_cuda -eq 1 ]; then
-        if ! command -v nvcc &> /dev/null && [ ! -d "/opt/cuda" ]; then
-            printf "WARNING: CUDA support requested but CUDA toolkit not found.\n" >&2
-            printf "WARNING: Install CUDA: sudo pacman -S cuda (or cuda from AUR)\n" >&2
-        fi
-    fi
-    
-    if [ $_enable_vulkan -eq 1 ]; then
-        if ! pacman -Qi vulkan-headers &> /dev/null; then
-            printf "WARNING: Vulkan support requested but vulkan-headers not installed.\n" >&2
-            printf "WARNING: Install Vulkan: sudo pacman -S vulkan-headers vulkan-icd-loader\n" >&2
-        fi
+        git clone --depth 1 https://github.com/ggerganov/whisper.cpp.git
     fi
 }
 
 build() {
     cd "$srcdir/$pkgname"
     
-    # Validate whisper.cpp was cloned
-    if [ ! -d "whisper.cpp" ] || [ ! -f "whisper.cpp/CMakeLists.txt" ]; then
-        printf "ERROR: whisper.cpp not found or incomplete. Run prepare() first.\n" >&2
+    # Build the C++ service with whisper.cpp
+    cd service
+    
+    # Create build directory
+    rm -rf build
+    mkdir -p build
+    cd build
+    
+    # Configure with CMake
+    local cmake_args=(
+        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_INSTALL_PREFIX=/usr
+        -DWHISPER_CPP_DIR="$srcdir/$pkgname/whisper.cpp"
+    )
+    
+    # Add GPU acceleration options
+    if [ "$_enable_cuda" = "1" ]; then
+        cmake_args+=(-DGGML_CUDA=ON)
+        printf "\n✓ Building with CUDA support\n\n"
+    fi
+    
+    if [ "$_enable_vulkan" = "1" ]; then
+        cmake_args+=(-DGGML_VULKAN=ON)
+        printf "\n✓ Building with Vulkan support\n\n"
+    fi
+    
+    cmake "${cmake_args[@]}" ..
+    
+    # Build
+    make -j$(nproc)
+    
+    printf "\n"
+    printf "===================================================================\n"
+    printf "Build Configuration:\n"
+    printf "  CUDA: $_enable_cuda\n"
+    printf "  Vulkan: $_enable_vulkan\n"
+    printf "===================================================================\n"
+    printf "\n"
+}
+
+check() {
+    cd "$srcdir/$pkgname/service/build"
+    
+    # Basic sanity checks
+    if [ ! -f "willow-service" ]; then
+        printf "ERROR: willow-service binary not found!\n"
         return 1
     fi
     
-    # Build whisper.cpp first
-    printf "Building whisper.cpp...\n"
-    cd whisper.cpp
-    
-    local cmake_opts="-DCMAKE_BUILD_TYPE=Release"
-    
-    if [ $_enable_cuda -eq 1 ]; then
-        printf "Configuring whisper.cpp with CUDA support...\n"
-        cmake_opts="$cmake_opts -DGGML_CUDA=ON"
-        if [ -d "/opt/cuda" ]; then
-            cmake_opts="$cmake_opts -DCUDAToolkit_ROOT=/opt/cuda"
-        fi
+    # Check if binary is executable
+    if [ ! -x "willow-service" ]; then
+        printf "ERROR: willow-service is not executable!\n"
+        return 1
     fi
     
-    if [ $_enable_vulkan -eq 1 ]; then
-        printf "Configuring whisper.cpp with Vulkan support...\n"
-        cmake_opts="$cmake_opts -DGGML_VULKAN=ON"
-    fi
-    
-    cmake -B build $cmake_opts
-    cmake --build build --parallel $(nproc)
-    cd ..
-    
-    # Build the service
-    printf "Building GNOME Assistant service...\n"
-    cd service
-    
-    cmake_opts="-DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DWHISPER_CPP_DIR=$srcdir/$pkgname/whisper.cpp"
-    
-    if [ $_enable_cuda -eq 1 ]; then
-        cmake_opts="$cmake_opts -DGGML_CUDA=ON"
-        if [ -d "/opt/cuda" ]; then
-            cmake_opts="$cmake_opts -DCUDAToolkit_ROOT=/opt/cuda -DCMAKE_CUDA_COMPILER=/opt/cuda/bin/nvcc"
-        fi
-    fi
-    
-    if [ $_enable_vulkan -eq 1 ]; then
-        cmake_opts="$cmake_opts -DGGML_VULKAN=ON"
-    fi
-    
-    cmake -B build $cmake_opts
-    cmake --build build --parallel $(nproc)
+    printf "✓ Binary checks passed\n"
 }
 
 package() {
     cd "$srcdir/$pkgname"
     
-    # Install the service binary
+    # Install service binary and D-Bus files
     cd service/build
-    DESTDIR="$pkgdir" cmake --install .
+    make DESTDIR="$pkgdir" install
     
     cd "$srcdir/$pkgname"
     
-    # Install systemd service file
-    install -Dm644 systemd/gnome-assistant.service \
-        "$pkgdir/usr/lib/systemd/user/gnome-assistant.service"
+    # Install systemd service
+    install -Dm644 systemd/willow.service \
+        "$pkgdir/usr/lib/systemd/user/willow.service"
     
     # Install GNOME extension
-    local ext_dir="$pkgdir/usr/share/gnome-shell/extensions/gnome-assistant@saim"
-    install -dm755 "$ext_dir"
-    cp -r gnome-extension/gnome-assistant@saim/* "$ext_dir/"
+    local ext_dir="$pkgdir/usr/share/gnome-shell/extensions/willow@saim"
+    mkdir -p "$ext_dir"
+    cp -r gnome-extension/willow@saim/* "$ext_dir/"
     
-    # Compile extension schemas
-    if [ -d "$ext_dir/schemas" ]; then
-        glib-compile-schemas "$ext_dir/schemas/"
-    fi
+    # Compile GSettings schema
+    glib-compile-schemas "$ext_dir/schemas/" || true
     
     # Install default configuration
     install -Dm644 config.json \
-        "$pkgdir/usr/share/gnome-assistant/config.json"
+        "$pkgdir/usr/share/willow/config.json"
+    
+    # Install LICENSE
+    install -Dm644 LICENSE \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
     
     # Install documentation
     install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
-    install -Dm644 docs/GPU_ACCELERATION.md "$pkgdir/usr/share/doc/$pkgname/GPU_ACCELERATION.md"
     
-    # Install LICENSE
-    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
-    
-    # Install model download helper
-    install -Dm755 download-model.sh "$pkgdir/usr/bin/gnome-assistant-download-model"
+    # Install download helper script
+    install -Dm755 download-model.sh "$pkgdir/usr/bin/willow-download-model"
 }

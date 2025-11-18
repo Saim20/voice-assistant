@@ -25,14 +25,14 @@ int main(int /*argc*/, char* /*argv*/[]) {
         auto connection = sdbus::createSessionBusConnection();
         
         // Request D-Bus name
-        connection->requestName(sdbus::ServiceName{"com.github.saim.GnomeAssistant"});
+        connection->requestName(sdbus::ServiceName{"com.github.saim.Willow"});
         
         // Create service object
         const std::string objectPath = "/com/github/saim/VoiceAssistant";
         VoiceAssistant::VoiceAssistantService service(*connection, objectPath);
 
         std::cout << "GNOME Assistant Service running on D-Bus" << std::endl;
-        std::cout << "Bus name: com.github.saim.GnomeAssistant" << std::endl;
+        std::cout << "Bus name: com.github.saim.Willow" << std::endl;
         std::cout << "Object path: " << objectPath << std::endl;
         std::cout << "Press Ctrl+C to exit" << std::endl;
 

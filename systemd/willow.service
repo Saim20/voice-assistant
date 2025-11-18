@@ -1,12 +1,12 @@
 [Unit]
-Description=GNOME Assistant Service with Whisper.cpp
-Documentation=https://github.com/saim/gnome-assistant
+Description=Willow Voice Assistant Service
+Documentation=https://github.com/saim/willow
 After=graphical-session.target
 
 [Service]
 Type=dbus
-BusName=com.github.saim.GnomeAssistant
-ExecStart=/usr/bin/gnome-assistant-service
+BusName=com.github.saim.Willow
+ExecStart=/usr/bin/willow-service
 Restart=on-failure
 RestartSec=5
 
@@ -23,7 +23,7 @@ PrivateTmp=false
 NoNewPrivileges=false
 
 # Allow access to config and model directories
-ReadWritePaths=%h/.config/gnome-assistant
+ReadWritePaths=%h/.config/willow
 
 [Install]
 WantedBy=default.target

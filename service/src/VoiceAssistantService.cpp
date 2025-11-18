@@ -35,7 +35,7 @@ VoiceAssistantService::VoiceAssistantService(sdbus::IConnection& connection, std
     m_object = sdbus::createObject(m_connection, sdbus::ObjectPath(m_objectPath));
 
     // Register D-Bus methods using vtable API (sdbus-c++ v2.x)
-    const char* interfaceName = "com.github.saim.GnomeAssistant";
+    const char* interfaceName = "com.github.saim.Willow";
     
     // Helper lambdas for method callbacks
     auto setModeCallback = [this](sdbus::MethodCall call) {

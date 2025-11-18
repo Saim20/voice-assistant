@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(gnome-assistant-service VERSION 2.0.0 LANGUAGES CXX)
+project(willow-service VERSION 2.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -87,10 +87,10 @@ set(HEADERS
 )
 
 # Create executable
-add_executable(gnome-assistant-service ${SOURCES} ${HEADERS})
+add_executable(willow-service ${SOURCES} ${HEADERS})
 
 # Link libraries
-target_link_libraries(gnome-assistant-service
+target_link_libraries(willow-service
     PRIVATE
         PkgConfig::SDBUS
         PkgConfig::JSONCPP
@@ -99,18 +99,18 @@ target_link_libraries(gnome-assistant-service
 )
 
 if(PULSEAUDIO_FOUND)
-    target_link_libraries(gnome-assistant-service PRIVATE PkgConfig::PULSEAUDIO)
-    target_compile_definitions(gnome-assistant-service PRIVATE HAVE_PULSEAUDIO)
+    target_link_libraries(willow-service PRIVATE PkgConfig::PULSEAUDIO)
+    target_compile_definitions(willow-service PRIVATE HAVE_PULSEAUDIO)
 endif()
 
 # Include directories
-target_include_directories(gnome-assistant-service
+target_include_directories(willow-service
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
 # Compiler flags
-target_compile_options(gnome-assistant-service
+target_compile_options(willow-service
     PRIVATE
         -Wall
         -Wextra
@@ -120,23 +120,23 @@ target_compile_options(gnome-assistant-service
 )
 
 # Install targets
-install(TARGETS gnome-assistant-service
+install(TARGETS willow-service
     RUNTIME DESTINATION bin
 )
 
 # Install D-Bus service file
 configure_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/../dbus/com.github.saim.GnomeAssistant.service.in
-    ${CMAKE_CURRENT_BINARY_DIR}/com.github.saim.GnomeAssistant.service
+    ${CMAKE_CURRENT_SOURCE_DIR}/../dbus/com.github.saim.Willow.service.in
+    ${CMAKE_CURRENT_BINARY_DIR}/com.github.saim.Willow.service
     @ONLY
 )
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/com.github.saim.GnomeAssistant.service
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/com.github.saim.Willow.service
     DESTINATION share/dbus-1/services
 )
 
 # Install D-Bus interface XML
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../dbus/com.github.saim.GnomeAssistant.xml
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../dbus/com.github.saim.Willow.xml
     DESTINATION share/dbus-1/interfaces
 )
 

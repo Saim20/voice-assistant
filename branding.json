@@ -1,0 +1,37 @@
+{
+  "project": {
+    "name": "Willow",
+    "name_lower": "willow",
+    "name_slug": "willow",
+    "description": "Simple offline configurable voice assistant for gnome",
+    "full_name": "Willow Voice Assistant",
+    "tagline": "Your offline voice companion for GNOME"
+  },
+  "author": {
+    "name": "saim",
+    "github_username": "Saim20"
+  },
+  "technical": {
+    "dbus_interface": "com.github.saim.Willow",
+    "extension_uuid": "willow@saim",
+    "service_name": "willow-service",
+    "binary_name": "willow-service",
+    "download_script": "willow-download-model",
+    "systemd_service": "willow.service",
+    "config_dir": "willow",
+    "data_dir": "willow",
+    "package_name": "willow",
+    "gschema_id": "org.gnome.shell.extensions.willow"
+  },
+  "paths": {
+    "config": "~/.config/willow",
+    "data": "~/.local/share/willow",
+    "models": "~/.local/share/willow/models"
+  },
+  "urls": {
+    "repository": "https://github.com/Saim20/willow",
+    "issues": "https://github.com/Saim20/willow/issues",
+    "documentation": "/usr/share/doc/willow/"
+  },
+  "version": "2.0.0"
+}
